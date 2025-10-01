@@ -27,14 +27,14 @@ def ui():
     colc1, colc2 = st.sidebar.columns(2)
     with colc1:
         if st.button('Build mover cube (True)'):
-            import subprocess, sys, os
+            import subprocess, sys
             script = os.path.join(os.getcwd(), 'build_win_cube.py')
             cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind','True','-o', cube_mover]
             res=subprocess.run(cmd, capture_output=True, text=True)
             st.code((res.stdout or '') + (res.stderr or ''))
     with colc2:
         if st.button('Build non-mover cube (False)'):
-            import subprocess, sys, os
+            import subprocess, sys
             script = os.path.join(os.getcwd(), 'build_win_cube.py')
             cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind','False','-o', cube_non_mover]
             res=subprocess.run(cmd, capture_output=True, text=True)
