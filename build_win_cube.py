@@ -6,9 +6,7 @@ import argparse
 
 def default_store_glob() -> str:
     here = os.getcwd()
-    local = os.path.join(here, "duckdb_partitioned_store", "**", "*.parquet")
-    home = os.path.expanduser("~/codebase-comparison/duckdb_partitioned_store/**/*.parquet")
-    return local if os.path.exists(os.path.join(here, "duckdb_partitioned_store")) else home
+    return os.path.join(here, "duckdb_partitioned_store", "**", "*.parquet")
 
 
 def build_win_cube(store_glob: str, ds: str, mover_ind: str, output_csv: str) -> int:
@@ -127,4 +125,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     sys.exit(main())
-

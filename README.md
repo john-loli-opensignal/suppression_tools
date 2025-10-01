@@ -27,17 +27,17 @@ Typical Flow
 6) When satisfied, click “Build suppressed dataset” (wraps the existing builder)
 
 Notes
-- Plans are saved to ~/codebase-comparison/suppression_tools/suppressions/<round_name>.csv
+- Plans are saved to ./suppressions/<round_name>.csv within this project directory
 - Round configs (when exporting from the simulator) are saved under
-  ~/codebase-comparison/suppression_tools/suppressions/rounds/<round_name>/
+  ./suppressions/rounds/<round_name>/
 - QA columns are ignored when applying; only the key + remove_units are used
-- The builder writes a new dataset to ~/codebase-comparison/duckdb_partitioned_store_suppressed
+- The builder writes a new dataset to ./duckdb_partitioned_store_suppressed
 
 Paths and Defaults
-- Suppressions directory (applied plans): ~/codebase-comparison/suppression_tools/suppressions
-- Suppression rounds directory: ~/codebase-comparison/suppression_tools/suppressions/rounds
-- Partitioned dataset input (parquet glob): ~/codebase-comparison/duckdb_partitioned_store/**/*.parquet
-- Suppressed dataset output: ~/codebase-comparison/duckdb_partitioned_store_suppressed
+- Suppressions directory (applied plans): ./suppressions
+- Suppression rounds directory: ./suppressions/rounds
+- Partitioned dataset input (parquet glob): ./duckdb_partitioned_store/**/*.parquet
+- Suppressed dataset output: ./duckdb_partitioned_store_suppressed
 
 TODO
 - Create a hosted Git remote (GitHub/Bitbucket) and update the local `origin` to the hosted URL. Then open PRs from `codex-agent` to `main` for merges.

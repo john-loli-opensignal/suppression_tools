@@ -260,12 +260,12 @@ def run(store_glob: str, dates: list[str], ds: str = 'gamoshi', mover_ind: str =
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description='DuckDB-only suppression planner for AT&T on selected dates')
-    ap.add_argument('--store-dir', default=os.path.expanduser('~/codebase-comparison/duckdb_partitioned_store'))
+    ap.add_argument('--store-dir', default=os.path.join(os.getcwd(), 'duckdb_partitioned_store'))
     ap.add_argument('--ds', default='gamoshi')
     ap.add_argument('--mover-ind', default='False', choices=['True','False'])
     ap.add_argument('--winner', default='AT&T')
     ap.add_argument('--dates', nargs='+', default=['2025-08-14','2025-08-15','2025-08-16','2025-08-17'])
-    ap.add_argument('-o', '--out', default=os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions/att_duckdb_plan_aug14_17.csv'))
+    ap.add_argument('-o', '--out', default=os.path.join(os.getcwd(), 'suppressions', 'att_duckdb_plan_aug14_17.csv'))
     args = ap.parse_args()
     store_glob = args.store_dir if args.store_dir.endswith('.parquet') else os.path.join(args.store_dir, '**', '*.parquet')
     run(store_glob, args.dates, ds=args.ds, mover_ind=args.mover_ind, winner=args.winner, out_csv=args.out)

@@ -114,11 +114,12 @@ def build_suppressed(store_glob: str, sup_df: pd.DataFrame, out_dir: str, min_wi
 
 def main():
     ap = argparse.ArgumentParser(description='Build suppressed dataset by anti-joining top-down removed rows (no partial rows)')
-    ap.add_argument('--store-glob', default=os.path.expanduser('~/codebase-comparison/duckdb_partitioned_store/**/*.parquet'))
-    ap.add_argument('--suppressions-glob', default=os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions/*.csv'))
+    here = os.getcwd()
+    ap.add_argument('--store-glob', default=os.path.join(here, 'duckdb_partitioned_store', '**', '*.parquet'))
+    ap.add_argument('--suppressions-glob', default=os.path.join(here, 'suppressions', '*.csv'))
     ap.add_argument('--max-files', type=int, default=5)
-    ap.add_argument('--output-dir', default=os.path.expanduser('~/codebase-comparison/duckdb_partitioned_store_suppressed'))
-    ap.add_argument('--processed-dir', default=os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions/processed'))
+    ap.add_argument('--output-dir', default=os.path.join(here, 'duckdb_partitioned_store_suppressed'))
+    ap.add_argument('--processed-dir', default=os.path.join(here, 'suppressions', 'processed'))
     ap.add_argument('--clean', action='store_true', help='Delete contents of the output directory before writing')
     ap.add_argument('--min-wins', type=float, default=1.0)
     args = ap.parse_args()

@@ -716,7 +716,7 @@ def main():
     # Suppression controls
     st.sidebar.markdown("---")
     st.sidebar.subheader("🗜️ Suppressions")
-    supp_dir = st.sidebar.text_input("Suppressions folder", value=os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions'))
+    supp_dir = st.sidebar.text_input("Suppressions folder", value=os.path.join(os.getcwd(), 'suppressions'))
     apply_supp = st.sidebar.checkbox("Apply suppressions", value=True)
     os.makedirs(supp_dir, exist_ok=True)
     loaded = load_suppressions(supp_dir)
@@ -966,7 +966,7 @@ def main():
                             prog.progress(min(100, int(done/total*100)))
                         import pandas as _pd
                         if plan_parts:
-                            r2_dir = os.path.expanduser(os.path.join('~/codebase-comparison/suppression_tools/suppressions/rounds', r2_name_inline))
+                            r2_dir = os.path.join(os.getcwd(), 'suppressions', 'rounds', r2_name_inline)
                             os.makedirs(r2_dir, exist_ok=True)
                             out_csv = os.path.join(r2_dir, 'plan.csv')
                             r2_df = _pd.concat(plan_parts, ignore_index=True)
@@ -987,7 +987,7 @@ def main():
                             st.session_state['round_select'] = r2_name_inline
                             st.success(f"Wrote Round 2 plan: {out_csv}")
                             if r2_copy_inline:
-                                main_copy = os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions')
+                                main_copy = os.path.join(os.getcwd(), 'suppressions')
                                 os.makedirs(main_copy, exist_ok=True)
                                 copy_path = os.path.join(main_copy, f'{r2_name_inline}.csv')
                                 r2_df.to_csv(copy_path, index=False)
@@ -1123,7 +1123,7 @@ def main():
                         name = st.text_input("Save as round name", value="preview_round")
                     with colsv2:
                         if st.button("Save preview to rounds folder"):
-                            rd = os.path.expanduser(os.path.join('~/codebase-comparison/suppression_tools/suppressions/rounds', name))
+                            rd = os.path.join(os.getcwd(), 'suppressions', 'rounds', name)
                             os.makedirs(rd, exist_ok=True)
                             plan_prev.to_csv(os.path.join(rd, 'plan.csv'), index=False)
                             st.success(f"Saved preview to {os.path.join(rd, 'plan.csv')}")
@@ -1181,14 +1181,14 @@ def main():
                                     plan_parts.append(part)
                             import pandas as _pd
                             if plan_parts:
-                                r2_dir = os.path.expanduser(os.path.join('~/codebase-comparison/suppression_tools/suppressions/rounds', r2_name))
+                                r2_dir = os.path.join(os.getcwd(), 'suppressions', 'rounds', r2_name)
                                 os.makedirs(r2_dir, exist_ok=True)
                                 out_csv = os.path.join(r2_dir, 'plan.csv')
                                 r2_df = _pd.concat(plan_parts, ignore_index=True)
                                 r2_df.to_csv(out_csv, index=False)
                                 st.success(f"Wrote Round 2 plan: {out_csv}")
                                 if r2_copy:
-                                    main_copy = os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions')
+                                    main_copy = os.path.join(os.getcwd(), 'suppressions')
                                     os.makedirs(main_copy, exist_ok=True)
                                     copy_path = os.path.join(main_copy, f'{r2_name}.csv')
                                     r2_df.to_csv(copy_path, index=False)
@@ -1207,7 +1207,7 @@ def main():
     # Suppression Round (Config-driven): save and run via DuckDB planner
     st.markdown("---")
     st.header("🧪 Suppression Round (Config)")
-    rounds_base = os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions/rounds')
+    rounds_base = os.path.join(os.getcwd(), 'suppressions', 'rounds')
     os.makedirs(rounds_base, exist_ok=True)
 
     colA, colB = st.columns(2)
@@ -1350,7 +1350,7 @@ def main():
                             plan_df = _pd.DataFrame(columns=['date','winner','mover_ind','loser','dma_name','remove_units','stage'])
                     st.success(f"Wrote plan: {out_csv}")
                     if also_copy:
-                        main_copy = os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions')
+                        main_copy = os.path.join(os.getcwd(), 'suppressions')
                         os.makedirs(main_copy, exist_ok=True)
                         copy_path = os.path.join(main_copy, f'{round_name}.csv')
                         # read-write copy to normalize columns
@@ -1368,7 +1368,7 @@ def main():
             if os.path.exists(plan_path):
                 dfp = pd.read_csv(plan_path)
                 # Merge into active suppressions by writing a combined temp file in suppressions folder
-                main_copy = os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions')
+                main_copy = os.path.join(os.getcwd(), 'suppressions')
                 os.makedirs(main_copy, exist_ok=True)
                 copy_path = os.path.join(main_copy, f'{choice}.csv')
                 dfp.to_csv(copy_path, index=False)
@@ -1472,7 +1472,7 @@ def main():
                             _pd.concat(parts, ignore_index=True).to_csv(out_csv, index=False)
                     st.success(f"Ran round from config. Wrote {out_csv}")
                     if also_copy:
-                        main_copy = os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions')
+                        main_copy = os.path.join(os.getcwd(), 'suppressions')
                         os.makedirs(main_copy, exist_ok=True)
                         copy_path = os.path.join(main_copy, f'{choice}.csv')
                         pd.read_csv(out_csv).to_csv(copy_path, index=False)

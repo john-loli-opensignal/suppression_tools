@@ -164,7 +164,7 @@ def distributed_fill(df_after_auto: pd.DataFrame, d: pd.Timestamp, winner: str, 
 
 def main():
     ap = argparse.ArgumentParser(description='Auto suppression planner (national outliers → granular removals)')
-    ap.add_argument('--store-dir', default=os.path.expanduser('~/codebase-comparison/duckdb_partitioned_store'))
+    ap.add_argument('--store-dir', default=os.path.join(os.getcwd(), 'duckdb_partitioned_store'))
     ap.add_argument('--ds', default='gamoshi')
     ap.add_argument('--mover-ind', default='False', choices=['True', 'False'])
     ap.add_argument('--start', default='2025-08-01')
@@ -172,7 +172,7 @@ def main():
     ap.add_argument('--window', type=int, default=14)
     ap.add_argument('--nat-z', type=float, default=2.5)
     ap.add_argument('--pair-z', type=float, default=1.5)
-    ap.add_argument('--out', default=os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions/auto_suppression_aug_gamoshi_mover0.csv'))
+    ap.add_argument('--out', default=os.path.join(os.getcwd(), 'suppressions', 'auto_suppression_aug_gamoshi_mover0.csv'))
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)

@@ -279,11 +279,11 @@ def run(ds_dir: str, dates: Iterable[str], winner: str = 'AT&T', ds: str = 'gamo
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description='AT&T auto suppression for specific dates')
-    ap.add_argument('--store-dir', default=os.path.expanduser('~/codebase-comparison/duckdb_partitioned_store'))
+    ap.add_argument('--store-dir', default=os.path.join(os.getcwd(), 'duckdb_partitioned_store'))
     ap.add_argument('--ds', default='gamoshi')
     ap.add_argument('--mover-ind', default='False', choices=['True','False'])
     ap.add_argument('--winner', default='AT&T')
     ap.add_argument('--dates', nargs='+', default=['2025-08-14','2025-08-15','2025-08-16','2025-08-17'])
-    ap.add_argument('-o', '--out', default=os.path.expanduser('~/codebase-comparison/suppression_tools/suppressions/att_aug14_17_plan.csv'))
+    ap.add_argument('-o', '--out', default=os.path.join(os.getcwd(), 'suppressions', 'att_aug14_17_plan.csv'))
     args = ap.parse_args()
     run(args.store_dir, args.dates, winner=args.winner, ds=args.ds, mover_ind=args.mover_ind, out_csv=args.out)

@@ -9,7 +9,7 @@ from suppression_tools.src.util import expand
 
 
 def default_store() -> str:
-    return expand('~/codebase-comparison/duckdb_partitioned_store/**/*.parquet')
+    return os.path.join(os.getcwd(), 'duckdb_partitioned_store', '**', '*.parquet')
 
 
 def ui():
@@ -22,25 +22,20 @@ def ui():
     mover_ind = st.sidebar.selectbox('mover_ind', ['False','True'], index=0)
 
     st.sidebar.header('Cubes')
-    cube_mover = st.sidebar.text_input('Mover cube CSV', value=os.path.expanduser('~/codebase-comparison/current_run_duckdb/win_cube_mover.csv'))
-    cube_non_mover = st.sidebar.text_input('Non-mover cube CSV', value=os.path.expanduser('~/codebase-comparison/current_run_duckdb/win_cube_non_mover.csv'))
+    cube_mover = st.sidebar.text_input('Mover cube CSV', value=os.path.join(os.getcwd(), 'current_run_duckdb', 'win_cube_mover.csv'))
+    cube_non_mover = st.sidebar.text_input('Non-mover cube CSV', value=os.path.join(os.getcwd(), 'current_run_duckdb', 'win_cube_non_mover.csv'))
     colc1, colc2 = st.sidebar.columns(2)
     with colc1:
         if st.button('Build mover cube (True)'):
             import subprocess, sys, os
-            script = os.path.expanduser('~/codebase-comparison/suppression_tools/build_win_cube.py')
-            if not os.path.exists(script):
-                # Fall back to the local script path in repo if running from a different location
-                script = os.path.join(os.getcwd(), 'build_win_cube.py')
+            script = os.path.join(os.getcwd(), 'build_win_cube.py')
             cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind','True','-o', cube_mover]
             res=subprocess.run(cmd, capture_output=True, text=True)
             st.code((res.stdout or '') + (res.stderr or ''))
     with colc2:
         if st.button('Build non-mover cube (False)'):
             import subprocess, sys, os
-            script = os.path.expanduser('~/codebase-comparison/suppression_tools/build_win_cube.py')
-            if not os.path.exists(script):
-                script = os.path.join(os.getcwd(), 'build_win_cube.py')
+            script = os.path.join(os.getcwd(), 'build_win_cube.py')
             cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind','False','-o', cube_non_mover]
             res=subprocess.run(cmd, capture_output=True, text=True)
             st.code((res.stdout or '') + (res.stderr or ''))
@@ -83,9 +78,7 @@ def ui():
                 # Auto-build cube if missing
                 if not os.path.exists(cube_path):
                     import subprocess, sys
-                    script = os.path.expanduser('~/codebase-comparison/suppression_tools/build_win_cube.py')
-                    if not os.path.exists(script):
-                        script = os.path.join(os.getcwd(), 'build_win_cube.py')
+                    script = os.path.join(os.getcwd(), 'build_win_cube.py')
                     cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind', mover_ind, '-o', cube_path]
                     res=subprocess.run(cmd, capture_output=True, text=True)
                     if res.returncode != 0:
@@ -239,7 +232,7 @@ def ui():
             if plan_prev is None or plan_prev.empty:
                 st.error('No plan preview to save.')
             else:
-                out_dir = expand('~/codebase-comparison/suppression_tools/suppressions')
+                out_dir = os.path.join(os.getcwd(), 'suppressions')
                 os.makedirs(out_dir, exist_ok=True)
                 path = os.path.join(out_dir, f'{round_name}.csv')
                 plan_prev.to_csv(path, index=False)
@@ -251,7 +244,7 @@ def ui():
         try:
             # Call the local builder script (kept under suppression_tools/tools)
             import subprocess, sys
-            cmd = [sys.executable, os.path.expanduser('~/codebase-comparison/suppression_tools/tools/build_suppressed_dataset.py')]
+            cmd = [sys.executable, os.path.join(os.getcwd(), 'tools', 'build_suppressed_dataset.py')]
             res = subprocess.run(cmd, capture_output=True, text=True)
             st.code(res.stdout or res.stderr)
         except Exception as e:
