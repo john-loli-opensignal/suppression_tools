@@ -208,6 +208,20 @@ def where_clause(filters: dict) -> str:
 
 
 @st.cache_data
+def get_date_bounds(ds_glob: str, filters: dict):
+    con = duckdb.connect()
+    try:
+        where = where_clause(filters)
+        q = f"SELECT MIN(CAST(the_date AS DATE)) AS mn, MAX(CAST(the_date AS DATE)) AS mx FROM parquet_scan('{ds_glob}') {where}"
+        df = con.execute(q).df()
+        if df.empty or pd.isna(df['mn'][0]) or pd.isna(df['mx'][0]):
+            return (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
+        return (pd.to_datetime(df['mn'][0]).date(), pd.to_datetime(df['mx'][0]).date())
+    finally:
+        con.close()
+
+
+@st.cache_data
 def get_distinct_options(ds_glob: str, column: str):
     con = duckdb.connect()
     try:
@@ -242,12 +256,14 @@ def get_ranked_winners(ds_glob: str, filters: dict):
 
 
 @st.cache_data
-def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, show_other: bool, metric: str, window: int, z_thresh: float) -> pd.DataFrame:
+def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, show_other: bool, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
     if not selected_winners:
         return pd.DataFrame(columns=["the_date", "winner", metric])
     con = duckdb.connect()
     try:
-        where = where_clause(filters)
+        base_where = where_clause(filters)
+        date_clause = f"CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'"
+        where = (base_where + (" AND " if base_where else " WHERE ") + date_clause) if start_date and end_date else base_where
         winners_list = ",".join([f"'{str(w).replace("'","''")}'" for w in selected_winners])
         metric_col = metric
         w = int(max(2, window))
@@ -255,7 +271,7 @@ def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, sh
         q = f"""
         WITH ds AS (
             SELECT * FROM parquet_scan('{ds_glob}')
-        ), filt AS (
+            ), filt AS (
             SELECT * FROM ds {where}
         ), market AS (
             SELECT the_date,
@@ -414,12 +430,14 @@ def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, sh
 
 
 @st.cache_data
-def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float) -> pd.DataFrame:
+def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
     if not primary or not competitors:
         return pd.DataFrame(columns=["the_date", "winner", metric])
     con = duckdb.connect()
     try:
-        where = where_clause(filters)
+        base_where = where_clause(filters)
+        date_clause = f"CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'"
+        where = (base_where + (" AND " if base_where else " WHERE ") + date_clause) if start_date and end_date else base_where
         comps_list = ",".join([f"'{str(c).replace("'","''")}'" for c in competitors])
         primary_q = str(primary).replace("'", "''")
         metric_col = metric
@@ -588,6 +606,21 @@ def main():
             current_value = "All"
         st.session_state.filters[col] = st.sidebar.selectbox(f"Filter by {col}", options=options, index=options.index(current_value))
 
+    # Graph Window (date range)
+    st.sidebar.subheader("🗓️ Graph Window")
+    try:
+        dmin, dmax = get_date_bounds(ds_glob, st.session_state.filters)
+    except Exception:
+        dmin, dmax = (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
+    if 'graph_start' not in st.session_state or not st.session_state.get('graph_start'):
+        st.session_state.graph_start = dmin
+    if 'graph_end' not in st.session_state or not st.session_state.get('graph_end'):
+        st.session_state.graph_end = dmax
+    st.session_state.graph_start = st.sidebar.date_input("Start date", value=st.session_state.graph_start, min_value=dmin, max_value=dmax)
+    st.session_state.graph_end = st.sidebar.date_input("End date", value=st.session_state.graph_end, min_value=dmin, max_value=dmax)
+    if st.session_state.graph_start > st.session_state.graph_end:
+        st.sidebar.error("Start date must be on or before End date.")
+
     # Run + Reset
     st.sidebar.markdown("---")
     st.sidebar.subheader("✨ Outliers")
@@ -629,6 +662,8 @@ def main():
                 st.session_state.metric,
                 st.session_state.outlier_window,
                 float(st.session_state.outlier_z),
+                str(st.session_state.graph_start),
+                str(st.session_state.graph_end),
             )
         else:
             if st.session_state.selection_mode == "Top N Carriers":
@@ -644,6 +679,8 @@ def main():
                 metric=st.session_state.metric,
                 window=st.session_state.outlier_window,
                 z_thresh=float(st.session_state.outlier_z),
+                start_date=str(st.session_state.graph_start),
+                end_date=str(st.session_state.graph_end),
             )
         st.session_state.last_pdf = pdf
         # capture applied signature
@@ -664,6 +701,8 @@ def main():
                 st.session_state.stacked,
                 int(st.session_state.outlier_window),
                 float(st.session_state.outlier_z),
+                str(st.session_state.graph_start),
+                str(st.session_state.graph_end),
             )
         except Exception:
             sig = None
@@ -722,6 +761,8 @@ def main():
             st.session_state.stacked,
             int(st.session_state.outlier_window),
             float(st.session_state.outlier_z),
+            str(st.session_state.graph_start),
+            str(st.session_state.graph_end),
         )
         if st.session_state.applied_signature and current_sig != st.session_state.applied_signature:
             st.info("Selections changed. Click RUN ANALYSIS to update the chart.")
