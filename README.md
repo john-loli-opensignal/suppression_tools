@@ -38,3 +38,6 @@ Paths and Defaults
 - Suppression rounds directory: ~/codebase-comparison/suppression_tools/suppressions/rounds
 - Partitioned dataset input (parquet glob): ~/codebase-comparison/duckdb_partitioned_store/**/*.parquet
 - Suppressed dataset output: ~/codebase-comparison/duckdb_partitioned_store_suppressed
+
+TODO
+- Create a hosted Git remote (GitHub/Bitbucket) and update the local `origin` to the hosted URL. Then open PRs from `codex-agent` to `main` for merges.
