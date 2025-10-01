@@ -9,13 +9,24 @@ def default_store_glob() -> str:
     return os.path.join(here, "duckdb_partitioned_store", "**", "*.parquet")
 
 
-def build_win_cube(store_glob: str, ds: str, mover_ind: str, output_csv: str) -> int:
+def build_win_cube(
+    store_glob: str,
+    ds: str,
+    mover_ind: str,
+    output_csv: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    only_outliers: bool = True,
+) -> int:
     try:
         import duckdb
     except Exception:
         print("[ERROR] duckdb not installed. Use uv to install: uv pip install --python .venv duckdb pandas numpy", file=sys.stderr)
         return 2
     mi = 'TRUE' if str(mover_ind) == 'True' else 'FALSE'
+    date_clause = ""
+    if start_date and end_date:
+        date_clause = f" AND CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'"
     ds_q = str(ds).replace("'", "''")
     q = f"""
     WITH base AS (
@@ -24,7 +35,7 @@ def build_win_cube(store_glob: str, ds: str, mover_ind: str, output_csv: str) ->
       SELECT CAST(the_date AS DATE) AS the_date, ds, mover_ind, winner, loser, dma_name,
              adjusted_wins, adjusted_losses
       FROM base
-      WHERE ds = '{ds_q}' AND mover_ind = {mi}
+      WHERE ds = '{ds_q}' AND mover_ind = {mi}{date_clause}
     ), typed AS (
       SELECT *, CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
                      WHEN strftime('%w', the_date)='0' THEN 'Sun'
@@ -93,6 +104,7 @@ def build_win_cube(store_glob: str, ds: str, mover_ind: str, output_csv: str) ->
     FROM pair_scored ps
     JOIN nat_metrics nm ON nm.the_date = ps.the_date AND nm.winner = ps.winner
     JOIN nat_scored ns   ON ns.the_date = ps.the_date AND ns.winner = ps.winner
+    {('WHERE ns.nat_outlier_pos ' if only_outliers else '')}
     ORDER BY 1,2,3,4;
     """
     con = duckdb.connect()
@@ -114,13 +126,24 @@ def parse_args(argv=None):
     p.add_argument("--store", default=default_store_glob(), help="Parquet glob for partitioned store")
     p.add_argument("--ds", default="gamoshi", help="Dataset id (ds)")
     p.add_argument("--mover-ind", choices=["True","False"], required=True, help="Mover indicator filter")
+    p.add_argument("--start-date", default=None, help="Optional start date (YYYY-MM-DD)")
+    p.add_argument("--end-date", default=None, help="Optional end date (YYYY-MM-DD)")
+    p.add_argument("--all-rows", action="store_true", help="Do not filter to national outlier days (produces a very large cube)")
     p.add_argument("-o", "--output", required=True, help="Output CSV path")
     return p.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
-    return build_win_cube(args.store, args.ds, args.mover_ind, args.output)
+    return build_win_cube(
+        args.store,
+        args.ds,
+        args.mover_ind,
+        args.output,
+        start_date=args.start_date,
+        end_date=args.end_date,
+        only_outliers=(not args.all_rows),
+    )
 
 
 if __name__ == "__main__":
