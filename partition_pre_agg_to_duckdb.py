@@ -55,6 +55,27 @@ def build_partitioned_dataset(base: str, rules: str, geo: str, output_dir: str, 
     con = duckdb.connect()
     try:
         con.execute("PRAGMA enable_progress_bar = true;")
+
+        # Inspect geo schema to tolerate alternate column names
+        geo_cols = set()
+        try:
+            df_cols = con.execute(f"DESCRIBE SELECT * FROM parquet_scan('{geo_glob}') LIMIT 0").df()
+            geo_cols = set(df_cols['column_name'].astype(str).tolist())
+        except Exception:
+            geo_cols = set()
+        blockid_candidates = [
+            'census_blockid', 'serv_terr_blockid', 'acs_2017_blockid', 'popstats_blockid'
+        ]
+        state_candidates = [
+            'state_name', 'state', 'state_abbr'
+        ]
+        blockid_col = next((c for c in blockid_candidates if c in geo_cols), None)
+        state_col = next((c for c in state_candidates if c in geo_cols), None)
+        if not blockid_col:
+            raise RuntimeError("Geo parquet missing a recognizable blockid column (tried census_blockid, serv_terr_blockid, acs_2017_blockid, popstats_blockid)")
+
+        # Build query with detected geo columns
+        state_sel = f", {state_col} AS state" if state_col else ", NULL::VARCHAR AS state"
         query = f"""
         WITH base AS (
             SELECT * FROM parquet_scan('{base_glob}')
@@ -68,7 +89,7 @@ def build_partitioned_dataset(base: str, rules: str, geo: str, output_dir: str, 
             FROM parquet_scan('{rules_glob}')
         ),
         geo AS (
-            SELECT census_blockid, dma, dma_name, state_name AS state
+            SELECT {blockid_col} AS census_blockid, dma, dma_name{state_sel}
             FROM parquet_scan('{geo_glob}')
         ),
         enr AS (
