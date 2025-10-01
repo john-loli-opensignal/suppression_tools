@@ -27,16 +27,23 @@ def ui():
     colc1, colc2 = st.sidebar.columns(2)
     with colc1:
         if st.button('Build mover cube (True)'):
-            import subprocess, sys
-            cmd=[sys.executable, os.path.expanduser('~/codebase-comparison/suppression_tools/build_win_cube.py'), '--mover-ind','True','-o', cube_mover]
+            import subprocess, sys, os
+            script = os.path.expanduser('~/codebase-comparison/suppression_tools/build_win_cube.py')
+            if not os.path.exists(script):
+                # Fall back to the local script path in repo if running from a different location
+                script = os.path.join(os.getcwd(), 'build_win_cube.py')
+            cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind','True','-o', cube_mover]
             res=subprocess.run(cmd, capture_output=True, text=True)
-            st.code(res.stdout or res.stderr)
+            st.code((res.stdout or '') + (res.stderr or ''))
     with colc2:
         if st.button('Build non-mover cube (False)'):
-            import subprocess, sys
-            cmd=[sys.executable, os.path.expanduser('~/codebase-comparison/suppression_tools/build_win_cube.py'), '--mover-ind','False','-o', cube_non_mover]
+            import subprocess, sys, os
+            script = os.path.expanduser('~/codebase-comparison/suppression_tools/build_win_cube.py')
+            if not os.path.exists(script):
+                script = os.path.join(os.getcwd(), 'build_win_cube.py')
+            cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind','False','-o', cube_non_mover]
             res=subprocess.run(cmd, capture_output=True, text=True)
-            st.code(res.stdout or res.stderr)
+            st.code((res.stdout or '') + (res.stderr or ''))
 
     st.sidebar.header('Graph Window (view)')
     view_start = st.sidebar.date_input('Start', value=date(2025,6,1))
@@ -73,6 +80,17 @@ def ui():
         try:
             if use_cube:
                 cube_path = cube_mover if mover_ind=='True' else cube_non_mover
+                # Auto-build cube if missing
+                if not os.path.exists(cube_path):
+                    import subprocess, sys
+                    script = os.path.expanduser('~/codebase-comparison/suppression_tools/build_win_cube.py')
+                    if not os.path.exists(script):
+                        script = os.path.join(os.getcwd(), 'build_win_cube.py')
+                    cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind', mover_ind, '-o', cube_path]
+                    res=subprocess.run(cmd, capture_output=True, text=True)
+                    if res.returncode != 0:
+                        st.error(f"Cube build failed: {res.stderr or res.stdout}")
+                        return
                 df = pd.read_csv(cube_path, parse_dates=['the_date'])
                 out = df[(df['the_date']>=pd.Timestamp(view_start)) & (df['the_date']<=pd.Timestamp(view_end)) & (df['nat_outlier_pos']==True)][['the_date','winner']].drop_duplicates().sort_values(['the_date','winner'])
             else:
