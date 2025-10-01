@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# UV / venv
+.venv/
+
+# Local data artifacts (do not version large generated files)
+duckdb_partitioned_store/
+duckdb_partitioned_store_suppressed/
+current_run_duckdb/
+
+# Suppression outputs
+suppressions/*.csv
+suppressions/processed/
+
+# Misc
+*.log
+
