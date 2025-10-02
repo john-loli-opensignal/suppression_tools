@@ -30,12 +30,23 @@ def _con() -> duckdb.DuckDBPyConnection:
 
 
 def _build_extra_filters(state: str | None, dma_name: str | None) -> str:
+    """Render optional state/dma filters, ignoring sentinel values like 'All'."""
+    def _norm(v: str | None) -> str | None:
+        if v is None:
+            return None
+        s = str(v).strip()
+        if s == '' or s.lower() in ('all', 'none'):
+            return None
+        return s
+
     filters = []
-    if state:
-        filters.append(f"state = '{state.replace("'", "''")}'")
-    if dma_name:
-        filters.append(f"dma_name = '{dma_name.replace("'", "''")}'")
-    return " AND " + " AND ".join(filters) if filters else ""
+    st = _norm(state)
+    dm = _norm(dma_name)
+    if st:
+        filters.append(f"state = '{st.replace("'", "''")}'")
+    if dm:
+        filters.append(f"dma_name = '{dm.replace("'", "''")}'")
+    return (" AND " + " AND ".join(filters)) if filters else ""
 
 
 def national_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, window: int = 14, z_thresh: float = 2.5, state: str | None = None, dma_name: str | None = None) -> pd.DataFrame:
@@ -79,4 +90,3 @@ def cube_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end
         return con.execute(sql).df()
     finally:
         con.close()
-
