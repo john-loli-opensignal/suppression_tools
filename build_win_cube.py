@@ -16,7 +16,7 @@ def get_min_max_dates(ds_glob: str) -> tuple[str, str]:
     con = duckdb.connect()
     try:
         q = f"SELECT MIN(the_date) AS min_date, MAX(the_date) AS max_date FROM parquet_scan('{ds_glob}')"
-        result = con.execute(q).fetch_first()
+        result = con.execute(q).fetchone()
         if result and result[0] and result[1]:
             return str(result[0]), str(result[1])
         return '2020-01-01', '2030-01-01' # Fallback
