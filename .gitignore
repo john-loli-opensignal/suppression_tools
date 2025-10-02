@@ -24,6 +24,10 @@ duck_temp_*
 !*_example.db
 !*_test.db
 
+# Pre-aggregated cubes (regenerate from database)
+cubes/
+*_cube.parquet
+
 # Suppression outputs
 suppressions/*.csv
 suppressions/processed/
