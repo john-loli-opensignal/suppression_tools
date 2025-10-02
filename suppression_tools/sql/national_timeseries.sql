@@ -7,6 +7,7 @@ WITH ds AS (
   WHERE ds = '{ds}'
     AND mover_ind = {mover_ind}
     AND CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'
+    {extra_filters}
 ), market AS (
   SELECT the_date,
          SUM(adjusted_wins) AS market_total_wins,

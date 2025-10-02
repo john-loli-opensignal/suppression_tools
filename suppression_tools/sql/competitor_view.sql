@@ -7,6 +7,7 @@ WITH ds AS (
   WHERE ds = '{ds}'
     AND mover_ind = {mover_ind}
     AND CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'
+    {extra_filters}
 ), h2h AS (
   SELECT CAST(the_date AS DATE) AS the_date,
          loser AS competitor,
