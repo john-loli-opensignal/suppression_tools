@@ -84,6 +84,7 @@ def cube_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end
     tmpl = _load_sql('cube_outliers.sql')
     where_outlier = "WHERE ns.nat_outlier_pos" if only_outliers else ""
     extra_filters = _build_extra_filters(state, dma_name)
+    prev = max(2, int(window))
     sql = _render(tmpl, {
         'store_glob': store_glob,
         'ds': ds.replace("'", "''"),
@@ -95,6 +96,7 @@ def cube_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end
         'z_pair': float(z_pair),
         'where_outlier': where_outlier,
         'extra_filters': extra_filters,
+        'prev': int(prev),
     })
     con = _con()
     try:
