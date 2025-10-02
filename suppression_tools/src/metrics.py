@@ -28,14 +28,25 @@ def _con() -> duckdb.DuckDBPyConnection:
     return duckdb.connect()
 
 
-def national_timeseries(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str) -> pd.DataFrame:
+def _build_extra_filters(state: str | None, dma_name: str | None) -> str:
+    filters = []
+    if state:
+        filters.append(f"state = '{state.replace("'", "''")}'")
+    if dma_name:
+        filters.append(f"dma_name = '{dma_name.replace("'", "''")}'")
+    return " AND " + " AND ".join(filters) if filters else ""
+
+
+def national_timeseries(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, state: str | None = None, dma_name: str | None = None) -> pd.DataFrame:
     tmpl = _load_sql('national_timeseries.sql')
+    extra_filters = _build_extra_filters(state, dma_name)
     sql = _render(tmpl, {
         'store_glob': store_glob,
         'ds': ds.replace("'", "''"),
         'mover_ind': 'TRUE' if str(mover_ind) == 'True' else 'FALSE',
         'start_date': start_date,
         'end_date': end_date,
+        'extra_filters': extra_filters,
     })
     con = _con()
     try:
@@ -44,14 +55,16 @@ def national_timeseries(store_glob: str, ds: str, mover_ind: str, start_date: st
         con.close()
 
 
-def pair_metrics(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str) -> pd.DataFrame:
+def pair_metrics(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, state: str | None = None, dma_name: str | None = None) -> pd.DataFrame:
     tmpl = _load_sql('pair_metrics.sql')
+    extra_filters = _build_extra_filters(state, dma_name)
     sql = _render(tmpl, {
         'store_glob': store_glob,
         'ds': ds.replace("'", "''"),
         'mover_ind': 'TRUE' if str(mover_ind) == 'True' else 'FALSE',
         'start_date': start_date,
         'end_date': end_date,
+        'extra_filters': extra_filters,
     })
     con = _con()
     try:
@@ -60,9 +73,10 @@ def pair_metrics(store_glob: str, ds: str, mover_ind: str, start_date: str, end_
         con.close()
 
 
-def competitor_view(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, primary: str, competitors: Iterable[str]) -> pd.DataFrame:
+def competitor_view(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, primary: str, competitors: Iterable[str], state: str | None = None, dma_name: str | None = None) -> pd.DataFrame:
     comps = ",".join([f"'{str(c).replace("'","''")}'" for c in competitors]) or "''"
     tmpl = _load_sql('competitor_view.sql')
+    extra_filters = _build_extra_filters(state, dma_name)
     sql = _render(tmpl, {
         'store_glob': store_glob,
         'ds': ds.replace("'", "''"),
@@ -71,6 +85,7 @@ def competitor_view(store_glob: str, ds: str, mover_ind: str, start_date: str, e
         'end_date': end_date,
         'primary': primary.replace("'", "''"),
         'competitors': comps,
+        'extra_filters': extra_filters,
     })
     con = _con()
     try:

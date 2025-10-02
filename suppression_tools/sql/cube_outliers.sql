@@ -7,6 +7,7 @@ WITH ds AS (
   WHERE ds = '{ds}'
     AND mover_ind = {mover_ind}
     AND CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'
+    {extra_filters}
     AND dma_name IS NOT NULL
     AND adjusted_wins > 0
 ), market AS (

@@ -259,269 +259,80 @@ def get_ranked_winners(ds_glob: str, filters: dict):
 def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, show_other: bool, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
     if not selected_winners:
         return pd.DataFrame(columns=["the_date", "winner", metric])
-    con = duckdb.connect()
-    try:
-        base_where = where_clause(filters)
-        date_clause = f"CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'"
-        where = (base_where + (" AND " if base_where else " WHERE ") + date_clause) if start_date and end_date else base_where
-        winners_list = ",".join([f"'{str(w).replace("'","''")}'" for w in selected_winners])
-        metric_col = metric
-        w = int(max(2, window))
-        prev = w - 1
-        q = f"""
-        WITH ds AS (
-            SELECT * FROM parquet_scan('{ds_glob}')
-            ), filt AS (
-            SELECT * FROM ds {where}
-        ), market AS (
-            SELECT the_date,
-                   SUM(adjusted_wins) AS market_total_wins,
-                   SUM(adjusted_losses) AS market_total_losses
-            FROM filt
-            GROUP BY 1
-        ), selected AS (
-            SELECT the_date, winner,
-                   SUM(adjusted_wins) AS total_wins,
-                   SUM(adjusted_losses) AS total_losses
-            FROM filt
-            WHERE winner IN ({winners_list})
-            GROUP BY 1,2
-        ), selected_metrics AS (
-            SELECT s.the_date, s.winner,
-                   s.total_wins / NULLIF(m.market_total_wins, 0) AS win_share,
-                   s.total_losses / NULLIF(m.market_total_losses, 0) AS loss_share,
-                   s.total_wins / NULLIF(s.total_losses, 0) AS wins_per_loss
-            FROM selected s
-            JOIN market m USING (the_date)
-        ), combined AS (
-            SELECT * FROM selected_metrics
-        )
-        SELECT the_date,
-               winner,
-               {metric_col} AS {metric_col},
-               CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                    WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                    ELSE 'Weekday' END AS day_type,
-               CASE WHEN stddev_samp({metric_col}) OVER (
-                            PARTITION BY winner,
-                                CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                     WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                     ELSE 'Weekday' END
-                            ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) > 0
-                    THEN ABS({metric_col} - avg({metric_col}) OVER (
-                                PARTITION BY winner,
-                                    CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                         WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                         ELSE 'Weekday' END
-                                ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW))
-                         / NULLIF(stddev_samp({metric_col}) OVER (
-                                    PARTITION BY winner,
-                                        CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                             WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                             ELSE 'Weekday' END
-                                    ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW), 0)
-                    ELSE 0 END AS zscore,
-               CASE WHEN stddev_samp({metric_col}) OVER (
-                            PARTITION BY winner,
-                                CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                     WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                     ELSE 'Weekday' END
-                            ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) > 0
-                         AND ABS({metric_col} - avg({metric_col}) OVER (
-                                    PARTITION BY winner,
-                                        CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                             WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                             ELSE 'Weekday' END
-                                    ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW))
-                             / NULLIF(stddev_samp({metric_col}) OVER (
-                                        PARTITION BY winner,
-                                            CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                                 WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                                 ELSE 'Weekday' END
-                                        ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW), 0) > {z_thresh}
-                    THEN TRUE ELSE FALSE END AS is_outlier
-        FROM combined
-        ORDER BY 1,2
-        """
-        pdf = con.execute(q).df()
-        if show_other:
-            q_other = f"""
-            WITH ds AS (
-                SELECT * FROM parquet_scan('{ds_glob}')
-            ), filt AS (
-                SELECT * FROM ds {where}
-            ), market AS (
-                SELECT the_date,
-                       SUM(adjusted_wins) AS market_total_wins,
-                       SUM(adjusted_losses) AS market_total_losses
-                FROM filt
-                GROUP BY 1
-            ), other AS (
-                SELECT the_date,
-                       SUM(adjusted_wins) AS total_wins,
-                       SUM(adjusted_losses) AS total_losses
-                FROM filt
-                WHERE winner NOT IN ({winners_list})
-                GROUP BY 1
-            ), other_metrics AS (
-                SELECT o.the_date,
-                       'Other' AS winner,
-                       o.total_wins / NULLIF(market_total_wins, 0) AS win_share,
-                       o.total_losses / NULLIF(market_total_losses, 0) AS loss_share,
-                       o.total_wins / NULLIF(o.total_losses, 0) AS wins_per_loss
-                FROM other o
-                JOIN market m USING (the_date)
-            ), combined AS (
-                SELECT * FROM other_metrics
-            )
-            SELECT the_date,
-                   winner,
-                   {metric_col} AS {metric_col},
-                   CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                        WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                        ELSE 'Weekday' END AS day_type,
-                   CASE WHEN stddev_samp({metric_col}) OVER (
-                                PARTITION BY winner,
-                                    CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                         WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                         ELSE 'Weekday' END
-                                ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) > 0
-                        THEN ABS({metric_col} - avg({metric_col}) OVER (
-                                    PARTITION BY winner,
-                                        CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                             WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                             ELSE 'Weekday' END
-                                    ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW))
-                             / NULLIF(stddev_samp({metric_col}) OVER (
-                                        PARTITION BY winner,
-                                            CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                                 WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                                 ELSE 'Weekday' END
-                                        ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW), 0)
-                        ELSE 0 END AS zscore,
-                   CASE WHEN stddev_samp({metric_col}) OVER (
-                                PARTITION BY winner,
-                                    CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                         WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                         ELSE 'Weekday' END
-                                ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) > 0
-                             AND ABS({metric_col} - avg({metric_col}) OVER (
-                                        PARTITION BY winner,
-                                            CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                                 WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                                 ELSE 'Weekday' END
-                                        ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW))
-                                 / NULLIF(stddev_samp({metric_col}) OVER (
-                                            PARTITION BY winner,
-                                                CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                                     WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                                     ELSE 'Weekday' END
-                                            ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW), 0) > {z_thresh}
-                        THEN TRUE ELSE FALSE END AS is_outlier
-            FROM combined
-            ORDER BY 1
-            """
-            other_pdf = con.execute(q_other).df()
-            pdf = pd.concat([pdf, other_pdf], ignore_index=True)
-        # Return with day_type and outlier flags
-        return pdf[['the_date', 'winner', metric, 'day_type', 'zscore', 'is_outlier']].sort_values(['the_date', 'winner'])
-    finally:
-        con.close()
+    _ds = filters.get('ds', 'gamoshi')
+    _mover_ind = filters.get('mover_ind', 'False')
+    _state = filters.get('state') if filters else None
+    _dma = filters.get('dma_name') if filters else None
+
+    base = metrics.national_timeseries(ds_glob, _ds, _mover_ind, start_date, end_date, state=_state, dma_name=_dma)
+    if base.empty:
+        return pd.DataFrame(columns=["the_date", "winner", metric])
+    keep = base[['the_date', 'winner', metric]].copy()
+    keep = keep[keep['winner'].isin(selected_winners)]
+
+    outs = outliers.national_outliers(ds_glob, _ds, _mover_ind, start_date, end_date, window, z_thresh, state=_state, dma_name=_dma)
+    if not outs.empty:
+        keep = keep.merge(
+            outs[['the_date', 'winner', 'z', 'nat_outlier_pos']].rename(columns={'z': 'zscore', 'nat_outlier_pos': 'is_outlier'}),
+            on=['the_date', 'winner'], how='left')
+        keep['is_outlier'] = keep['is_outlier'].fillna(False)
+        keep['zscore'] = keep['zscore'].fillna(0.0)
+    else:
+        keep['is_outlier'] = False
+        keep['zscore'] = 0.0
+    keep['day_type'] = pd.to_datetime(keep['the_date']).dt.dayofweek.map(lambda x: 'Sat' if x == 6 else ('Sun' if x == 0 else 'Weekday'))
+
+    if show_other:
+        all_df = base[['the_date', 'winner', metric]].copy()
+        other = all_df[~all_df['winner'].isin(selected_winners)].groupby('the_date', as_index=False)[metric].sum()
+        if not other.empty:
+            other['winner'] = 'Other'
+            other['zscore'] = 0.0
+            other['is_outlier'] = False
+            other['day_type'] = pd.to_datetime(other['the_date']).dt.dayofweek.map(lambda x: 'Sat' if x == 6 else ('Sun' if x == 0 else 'Weekday'))
+            keep = pd.concat([keep, other[['the_date', 'winner', metric, 'day_type', 'zscore', 'is_outlier']]], ignore_index=True)
+
+    return keep[['the_date', 'winner', metric, 'day_type', 'zscore', 'is_outlier']].sort_values(['the_date', 'winner'])
 
 
 @st.cache_data
 def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
     if not primary or not competitors:
         return pd.DataFrame(columns=["the_date", "winner", metric])
-    con = duckdb.connect()
-    try:
-        base_where = where_clause(filters)
-        date_clause = f"CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'"
-        where = (base_where + (" AND " if base_where else " WHERE ") + date_clause) if start_date and end_date else base_where
-        comps_list = ",".join([f"'{str(c).replace("'","''")}'" for c in competitors])
-        primary_q = str(primary).replace("'", "''")
-        metric_col = metric
-        w = int(max(2, window))
-        prev = w - 1
-        q = f"""
-        WITH ds AS (
-            SELECT * FROM parquet_scan('{ds_glob}')
-        ), filt AS (
-            SELECT * FROM ds {where}
-        ), h2h AS (
-            SELECT the_date, loser AS competitor,
-                   SUM(adjusted_wins) AS h2h_wins,
-                   SUM(adjusted_losses) AS h2h_losses
-            FROM filt
-            WHERE winner = '{primary_q}' AND loser IN ({comps_list})
-            GROUP BY 1,2
-        ), primary_tot AS (
-            SELECT the_date,
-                   SUM(adjusted_wins) AS primary_total_wins,
-                   SUM(adjusted_losses) AS primary_total_losses
-            FROM filt
-            WHERE winner = '{primary_q}'
-            GROUP BY 1
-        ), base AS (
-            SELECT h.the_date,
-                   h.competitor AS winner,
-                   h.h2h_wins / NULLIF(p.primary_total_wins, 0) AS win_share,
-                   h.h2h_losses / NULLIF(p.primary_total_losses, 0) AS loss_share,
-                   h.h2h_wins / NULLIF(h.h2h_losses, 0) AS wins_per_loss
-            FROM h2h h
-            JOIN primary_tot p USING (the_date)
-        )
-        SELECT the_date,
-               winner,
-               {metric_col} AS {metric_col},
-               CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                    WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                    ELSE 'Weekday' END AS day_type,
-               CASE WHEN stddev_samp({metric_col}) OVER (
-                            PARTITION BY winner,
-                                CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                     WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                     ELSE 'Weekday' END
-                            ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) > 0
-                    THEN ABS({metric_col} - avg({metric_col}) OVER (
-                                PARTITION BY winner,
-                                    CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                         WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                         ELSE 'Weekday' END
-                                ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW))
-                         / NULLIF(stddev_samp({metric_col}) OVER (
-                                    PARTITION BY winner,
-                                        CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                             WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                             ELSE 'Weekday' END
-                                    ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW), 0)
-                    ELSE 0 END AS zscore,
-               CASE WHEN stddev_samp({metric_col}) OVER (
-                            PARTITION BY winner,
-                                CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                     WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                     ELSE 'Weekday' END
-                            ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) > 0
-                         AND ABS({metric_col} - avg({metric_col}) OVER (
-                                    PARTITION BY winner,
-                                        CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                             WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                             ELSE 'Weekday' END
-                                    ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW))
-                             / NULLIF(stddev_samp({metric_col}) OVER (
-                                        PARTITION BY winner,
-                                            CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
-                                                 WHEN strftime('%w', the_date)='0' THEN 'Sun'
-                                                 ELSE 'Weekday' END
-                                        ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW), 0) > {z_thresh}
-                    THEN TRUE ELSE FALSE END AS is_outlier
-        FROM base
-        ORDER BY 1,2
-        """
-        pdf = con.execute(q).df()
-        return pdf[['the_date', 'winner', metric, 'day_type', 'zscore', 'is_outlier']].sort_values(['the_date', 'winner'])
-    finally:
-        con.close()
+
+    _ds = filters.get('ds', 'gamoshi')
+    _mover_ind = filters.get('mover_ind', 'False')
+    _state = filters.get('state') if filters else None
+    _dma = filters.get('dma_name') if filters else None
+
+    base = metrics.competitor_view(ds_glob, _ds, _mover_ind, start_date, end_date, primary, competitors, state=_state, dma_name=_dma)
+    if base.empty:
+        return pd.DataFrame(columns=["the_date", "winner", metric])
+
+    df = base.copy()
+    if metric == 'win_share':
+        df[metric] = df['h2h_wins'] / df['primary_total_wins'].replace(0, pd.NA)
+    elif metric == 'loss_share':
+        df[metric] = df['h2h_losses'] / df['primary_total_losses'].replace(0, pd.NA)
+    else:
+        df[metric] = df['h2h_wins'] / df['h2h_losses'].replace(0, pd.NA)
+
+    df = df.rename(columns={'competitor': 'winner'})[['the_date', 'winner', metric]].copy()
+    df['the_date'] = pd.to_datetime(df['the_date'])
+    df['day_type'] = df['the_date'].dt.dayofweek.map(lambda x: 'Sat' if x == 6 else ('Sun' if x == 0 else 'Weekday'))
+
+    def _z_for_group(g):
+        s = g[metric]
+        win = max(2, int(window) - 1)
+        mu = s.shift(1).rolling(window=win, min_periods=2).mean()
+        sigma = s.shift(1).rolling(window=win, min_periods=2).std(ddof=1)
+        z = (s - mu) / sigma.replace({0: pd.NA})
+        return z.fillna(0.0)
+
+    df = df.sort_values(['winner', 'day_type', 'the_date'])
+    df['zscore'] = df.groupby(['winner', 'day_type'], as_index=False, group_keys=False).apply(_z_for_group)
+    df['is_outlier'] = df['zscore'] > float(z_thresh)
+    return df[['the_date', 'winner', metric, 'day_type', 'zscore', 'is_outlier']].sort_values(['the_date', 'winner'])
 
 
 def main():

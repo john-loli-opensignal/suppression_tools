@@ -29,8 +29,18 @@ def _con() -> duckdb.DuckDBPyConnection:
     return duckdb.connect()
 
 
-def national_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, window: int = 14, z_thresh: float = 2.5) -> pd.DataFrame:
+def _build_extra_filters(state: str | None, dma_name: str | None) -> str:
+    filters = []
+    if state:
+        filters.append(f"state = '{state.replace("'", "''")}'")
+    if dma_name:
+        filters.append(f"dma_name = '{dma_name.replace("'", "''")}'")
+    return " AND " + " AND ".join(filters) if filters else ""
+
+
+def national_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, window: int = 14, z_thresh: float = 2.5, state: str | None = None, dma_name: str | None = None) -> pd.DataFrame:
     tmpl = _load_sql('nat_outliers.sql')
+    extra_filters = _build_extra_filters(state, dma_name)
     sql = _render(tmpl, {
         'store_glob': store_glob,
         'ds': ds.replace("'", "''"),
@@ -39,6 +49,7 @@ def national_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str,
         'end_date': end_date,
         'window': int(window),
         'z_thresh': float(z_thresh),
+        'extra_filters': extra_filters,
     })
     con = _con()
     try:
@@ -47,9 +58,10 @@ def national_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str,
         con.close()
 
 
-def cube_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, window: int = 14, z_nat: float = 2.5, z_pair: float = 2.0, only_outliers: bool = True) -> pd.DataFrame:
+def cube_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, window: int = 14, z_nat: float = 2.5, z_pair: float = 2.0, only_outliers: bool = True, state: str | None = None, dma_name: str | None = None) -> pd.DataFrame:
     tmpl = _load_sql('cube_outliers.sql')
     where_outlier = "WHERE ns.nat_outlier_pos" if only_outliers else ""
+    extra_filters = _build_extra_filters(state, dma_name)
     sql = _render(tmpl, {
         'store_glob': store_glob,
         'ds': ds.replace("'", "''"),
@@ -60,6 +72,7 @@ def cube_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end
         'z_nat': float(z_nat),
         'z_pair': float(z_pair),
         'where_outlier': where_outlier,
+        'extra_filters': extra_filters,
     })
     con = _con()
     try:
