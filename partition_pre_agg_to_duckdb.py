@@ -126,7 +126,7 @@ def build_partitioned_dataset(base: str, rules: str, geo: str, output_dir: str, 
             SUM(CASE WHEN dma_name IS NULL THEN 1 ELSE 0 END) AS null_dma_name
         FROM final_data
         """
-        null_counts = con.execute(null_counts_query).fetch_first()
+        null_counts = con.execute(null_counts_query).fetchone()
 
         if null_counts and (null_counts[0] > 0 or null_counts[1] > 0 or null_counts[2] > 0):
             print(f"[ERROR] Found NULL keys in final data:", file=sys.stderr)
@@ -153,7 +153,7 @@ def build_partitioned_dataset(base: str, rules: str, geo: str, output_dir: str, 
             SUM(CASE WHEN dma_name IS NOT NULL THEN 1 ELSE 0 END) AS mapped_dma_rows
         FROM enr
         """
-        coverage_counts = con.execute(coverage_query).fetch_first()
+        coverage_counts = con.execute(coverage_query).fetchone()
 
         if coverage_counts and coverage_counts[0] > 0 and coverage_counts[1] < coverage_counts[0]:
             unmapped_count = coverage_counts[0] - coverage_counts[1]
