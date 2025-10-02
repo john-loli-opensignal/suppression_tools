@@ -39,6 +39,7 @@ def build_win_cube(
         return 2
 
     try:
+        print(f"DEBUG: start_date={start_date}, end_date={end_date}, only_outliers={only_outliers}")
         df = cube_outliers(store_glob, ds, mover_ind, start_date, end_date, window=14, z_nat=2.5, z_pair=2.0, only_outliers=only_outliers)
         os.makedirs(os.path.dirname(os.path.expanduser(output_csv)), exist_ok=True)
         df.to_csv(os.path.expanduser(output_csv), index=False)
