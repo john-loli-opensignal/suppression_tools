@@ -1,0 +1,17 @@
+the_date,ds,mover_ind,winner,loser,dma_name,adjusted_wins,adjusted_losses
+2025-01-01,test,True,Alpha,X,DMA1,10,5
+2025-01-01,test,True,Alpha,Y,DMA2,8,4
+2025-01-01,test,True,Beta,X,DMA1,6,3
+2025-01-01,test,True,Beta,Y,DMA2,7,3
+2025-01-02,test,True,Alpha,X,DMA1,11,6
+2025-01-02,test,True,Alpha,Y,DMA2,9,4
+2025-01-02,test,True,Beta,X,DMA1,5,2
+2025-01-02,test,True,Beta,Y,DMA2,6,3
+2025-01-03,test,True,Alpha,X,DMA1,12,6
+2025-01-03,test,True,Alpha,Y,DMA2,10,5
+2025-01-03,test,True,Beta,X,DMA1,4,2
+2025-01-03,test,True,Beta,Y,DMA2,5,2
+2025-01-04,test,True,Alpha,X,DMA1,13,7
+2025-01-04,test,True,Alpha,Y,DMA2,11,5
+2025-01-04,test,True,Beta,X,DMA1,3,1
+2025-01-04,test,True,Beta,Y,DMA2,4,2
