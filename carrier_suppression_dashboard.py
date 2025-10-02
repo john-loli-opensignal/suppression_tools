@@ -12,6 +12,17 @@ import json
 import importlib.util
 from datetime import date
 
+from suppression_tools.src import metrics
+from suppression_tools.src import outliers
+
+
+def is_simple_filter(filters: dict) -> bool:
+    """Returns True if filters only contain 'ds' and 'mover_ind' keys, False otherwise."""
+    if not filters:
+        return True
+    allowed_keys = {'ds', 'mover_ind'}
+    return all(key in allowed_keys for key in filters.keys()) and len(filters.keys()) <= len(allowed_keys)
+
 
 def get_default_store_dir() -> str:
     return os.path.join(os.getcwd(), "duckdb_partitioned_store")
@@ -26,6 +37,17 @@ def get_store_glob(store_dir: str) -> str:
         return store_dir
     return os.path.join(store_dir, "*.parquet")
 
+
+def get_min_max_dates(ds_glob: str) -> tuple[str, str]:
+    con = duckdb.connect()
+    try:
+        q = f"SELECT MIN(the_date) AS min_date, MAX(the_date) AS max_date FROM parquet_scan('{ds_glob}')"
+        result = con.execute(q).fetch_first()
+        if result and result[0] and result[1]:
+            return str(result[0]), str(result[1])
+        return '2020-01-01', '2030-01-01' # Fallback
+    finally:
+        con.close()
 
 def init_session_state():
     if 'analysis_mode' not in st.session_state:
@@ -125,83 +147,99 @@ def load_suppressions(supp_dir: str) -> pd.DataFrame:
 
 
 def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, show_other: bool, metric: str,
-                         suppressions: pd.DataFrame | None, apply_supp: bool) -> pd.DataFrame:
+                         suppressions: pd.DataFrame | None, apply_supp: bool, start_date: str, end_date: str) -> pd.DataFrame:
     if not selected_winners:
         return pd.DataFrame(columns=["the_date", "winner", metric])
-    con = duckdb.connect()
-    try:
-        where = where_clause(filters)
-        winners_list = ",".join([f"'{str(w).replace("'","''")}'" for w in selected_winners])
-        if apply_supp and suppressions is not None and not suppressions.empty:
-            sup = suppressions.copy()
-            sup['date'] = pd.to_datetime(sup['date'])
-            con.register('sup_df', sup)
-            join_adjust = """
-            , sup AS (
-                SELECT CAST(date AS DATE) AS d, winner, loser, dma_name, mover_ind, SUM(remove_units) AS remove_units
-                FROM sup_df
-                GROUP BY 1,2,3,4,5
-            ), grp AS (
-                SELECT CAST(the_date AS DATE) AS d, winner, loser, dma_name, mover_ind,
-                       SUM(adjusted_wins) AS group_wins
-                FROM filt
-                GROUP BY 1,2,3,4,5
-            ), joined AS (
-                SELECT f.*, COALESCE(s.remove_units, 0) AS remove_units,
-                       COALESCE(g.group_wins, 0) AS group_wins
-                FROM filt f
-                LEFT JOIN sup s
-                  ON CAST(f.the_date AS DATE)=s.d AND f.winner=s.winner AND f.loser=s.loser AND f.dma_name=s.dma_name AND f.mover_ind = s.mover_ind
-                LEFT JOIN grp g
-                  ON CAST(f.the_date AS DATE)=g.d AND f.winner=g.winner AND f.loser=g.loser AND f.dma_name=g.dma_name AND f.mover_ind = g.mover_ind
-            ), adj AS (
-                SELECT the_date, winner, loser, dma_name, mover_ind,
-                       GREATEST(0, adjusted_wins - (remove_units * (adjusted_wins / NULLIF(group_wins,0)))) AS adjusted_wins,
-                       adjusted_losses
-                FROM joined
-            )
-            """
-            source_tbl = "adj"
-        else:
-            join_adjust = ""
-            source_tbl = "filt"
 
-        q = f"""
-        WITH ds AS (
-            SELECT * FROM parquet_scan('{ds_glob}')
-        ), filt AS (
-            SELECT the_date, winner, loser, dma_name, mover_ind, adjusted_wins, adjusted_losses FROM ds {where}
-        )
-        {join_adjust}
-        , market AS (
-            SELECT the_date,
-                   SUM(adjusted_wins) AS market_total_wins,
-                   SUM(adjusted_losses) AS market_total_losses
-            FROM {source_tbl}
-            GROUP BY 1
-        ), selected AS (
-            SELECT the_date, winner,
-                   SUM(adjusted_wins) AS total_wins,
-                   SUM(adjusted_losses) AS total_losses
-            FROM {source_tbl}
-            WHERE winner IN ({winners_list})
-            GROUP BY 1,2
-        ), selected_metrics AS (
-            SELECT s.the_date, s.winner,
-                   s.total_wins / NULLIF(m.market_total_wins, 0) AS win_share,
-                   s.total_losses / NULLIF(m.market_total_losses, 0) AS loss_share,
-                   s.total_wins / NULLIF(s.total_losses, 0) AS wins_per_loss
-            FROM selected s
-            JOIN market m USING (the_date)
-        )
-        SELECT the_date, winner, {metric} AS {metric}
-        FROM selected_metrics
-        ORDER BY 1,2
-        """
-        pdf = con.execute(q).df()
-        return pdf
-    finally:
-        con.close()
+    if is_simple_filter(filters):
+        # Use shared module
+        _ds = filters.get('ds', 'gamoshi')
+        _mover_ind = filters.get('mover_ind', 'False')
+        df = metrics.national_timeseries(ds_glob, _ds, _mover_ind, start_date, end_date)
+        if df.empty:
+            return pd.DataFrame(columns=["the_date", "winner", metric])
+        # Filter for selected winners and compute metric
+        df = df[df['winner'].isin(selected_winners)].copy()
+        df['win_share'] = df['total_wins'] / df['market_total_wins'].replace(0, pd.NA)
+        df['loss_share'] = df['total_losses'] / df['market_total_losses'].replace(0, pd.NA)
+        df['wins_per_loss'] = df['total_wins'] / df['total_losses'].replace(0, pd.NA)
+        return df[['the_date', 'winner', metric]].dropna().sort_values(['the_date', 'winner'])
+    else:
+        # Fallback to legacy path
+        con = duckdb.connect()
+        try:
+            where = where_clause(filters)
+            winners_list = ",".join([f"'{str(w).replace("'","''")}'" for w in selected_winners])
+            if apply_supp and suppressions is not None and not suppressions.empty:
+                sup = suppressions.copy()
+                sup['date'] = pd.to_datetime(sup['date'])
+                con.register('sup_df', sup)
+                join_adjust = """
+                , sup AS (
+                    SELECT CAST(date AS DATE) AS d, winner, loser, dma_name, mover_ind, SUM(remove_units) AS remove_units
+                    FROM sup_df
+                    GROUP BY 1,2,3,4,5
+                ), grp AS (
+                    SELECT CAST(the_date AS DATE) AS d, winner, loser, dma_name, mover_ind,
+                           SUM(adjusted_wins) AS group_wins
+                    FROM filt
+                    GROUP BY 1,2,3,4,5
+                ), joined AS (
+                    SELECT f.*, COALESCE(s.remove_units, 0) AS remove_units,
+                           COALESCE(g.group_wins, 0) AS group_wins
+                    FROM filt f
+                    LEFT JOIN sup s
+                      ON CAST(f.the_date AS DATE)=s.d AND f.winner=s.winner AND f.loser=s.loser AND f.dma_name=s.dma_name AND f.mover_ind = s.mover_ind
+                    LEFT JOIN grp g
+                      ON CAST(f.the_date AS DATE)=g.d AND f.winner=g.winner AND f.loser=g.loser AND f.dma_name=g.dma_name AND f.mover_ind = g.mover_ind
+                ), adj AS (
+                    SELECT the_date, winner, loser, dma_name, mover_ind,
+                           GREATEST(0, adjusted_wins - (remove_units * (adjusted_wins / NULLIF(group_wins,0)))) AS adjusted_wins,
+                           adjusted_losses
+                    FROM joined
+                )
+                """
+                source_tbl = "adj"
+            else:
+                join_adjust = ""
+                source_tbl = "filt"
+
+            q = f"""
+            WITH ds AS (
+                SELECT * FROM parquet_scan('{ds_glob}')
+            ), filt AS (
+                SELECT the_date, winner, loser, dma_name, mover_ind, adjusted_wins, adjusted_losses FROM ds {where}
+            )
+            {join_adjust}
+            , market AS (
+                SELECT the_date,
+                       SUM(adjusted_wins) AS market_total_wins,
+                       SUM(adjusted_losses) AS market_total_losses
+                FROM {source_tbl}
+                GROUP BY 1
+            ), selected AS (
+                SELECT the_date, winner,
+                       SUM(adjusted_wins) AS total_wins,
+                       SUM(adjusted_losses) AS total_losses
+                FROM {source_tbl}
+                WHERE winner IN ({winners_list})
+                GROUP BY 1,2
+            ), selected_metrics AS (
+                SELECT s.the_date, s.winner,
+                       s.total_wins / NULLIF(m.market_total_wins, 0) AS win_share,
+                       s.total_losses / NULLIF(m.market_total_losses, 0) AS loss_share,
+                       s.total_wins / NULLIF(s.total_losses, 0) AS wins_per_loss
+                FROM selected s
+                JOIN market m USING (the_date)
+            )
+            SELECT the_date, winner, {metric} AS {metric}
+            FROM selected_metrics
+            ORDER BY 1,2
+            """
+            pdf = con.execute(q).df()
+            return pdf
+        finally:
+            con.close()
 
 
 def compute_suppression_summary(ds_glob: str, filters: dict, suppressions: pd.DataFrame) -> pd.DataFrame:
@@ -470,81 +508,95 @@ def compute_pair_qa_for_plan(ds_glob: str, filters: dict, plan_df: pd.DataFrame)
 
 
 def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitors: list, metric: str,
-                           suppressions: pd.DataFrame | None, apply_supp: bool) -> pd.DataFrame:
+                           suppressions: pd.DataFrame | None, apply_supp: bool, start_date: str, end_date: str) -> pd.DataFrame:
     if not primary or not competitors:
         return pd.DataFrame(columns=["the_date", "winner", metric])
-    con = duckdb.connect()
-    try:
-        where = where_clause(filters)
-        comps_list = ",".join([f"'{str(c).replace("'","''")}'" for c in competitors])
-        primary_q = str(primary).replace("'", "''")
-        if apply_supp and suppressions is not None and not suppressions.empty:
-            sup = suppressions.copy(); sup['date'] = pd.to_datetime(sup['date']); con.register('sup_df', sup)
-            join_adjust = """
-            , sup AS (
-                SELECT CAST(date AS DATE) AS d, winner, loser, dma_name, mover_ind, SUM(remove_units) AS remove_units
-                FROM sup_df
-                GROUP BY 1,2,3,4,5
-            ), grp AS (
-                SELECT CAST(the_date AS DATE) AS d, winner, loser, dma_name, mover_ind,
-                       SUM(adjusted_wins) AS group_wins
-                FROM filt
-                GROUP BY 1,2,3,4,5
-            ), joined AS (
-                SELECT f.*, COALESCE(s.remove_units, 0) AS remove_units,
-                       COALESCE(g.group_wins, 0) AS group_wins
-                FROM filt f
-                LEFT JOIN sup s
-                  ON CAST(f.the_date AS DATE)=s.d AND f.winner=s.winner AND f.loser=s.loser AND f.dma_name=s.dma_name AND f.mover_ind = s.mover_ind
-                LEFT JOIN grp g
-                  ON CAST(f.the_date AS DATE)=g.d AND f.winner=g.winner AND f.loser=g.loser AND f.dma_name=g.dma_name AND f.mover_ind = g.mover_ind
-            ), adj AS (
-                SELECT the_date, winner, loser, dma_name, mover_ind,
-                       GREATEST(0, adjusted_wins - (remove_units * (adjusted_wins / NULLIF(group_wins,0)))) AS adjusted_wins,
-                       adjusted_losses
-                FROM joined
+
+    if is_simple_filter(filters):
+        # Use shared module
+        _ds = filters.get('ds', 'gamoshi')
+        _mover_ind = filters.get('mover_ind', 'False')
+        df = metrics.competitor_view(ds_glob, _ds, _mover_ind, start_date, end_date, primary, competitors)
+        if df.empty:
+            return pd.DataFrame(columns=["the_date", "winner", metric])
+        # Compute metric
+        df['win_share'] = df['h2h_wins'] / df['primary_total_wins'].replace(0, pd.NA)
+        df['loss_share'] = df['h2h_losses'] / df['primary_total_losses'].replace(0, pd.NA)
+        df['wins_per_loss'] = df['h2h_wins'] / df['h2h_losses'].replace(0, pd.NA)
+        return df[['the_date', 'competitor', metric]].rename(columns={'competitor': 'winner'}).dropna().sort_values(['the_date', 'winner'])
+    else:
+        # Fallback to legacy path
+        con = duckdb.connect()
+        try:
+            where = where_clause(filters)
+            comps_list = ",".join([f"'{str(c).replace("'","''")}'" for c in competitors])
+            primary_q = str(primary).replace("'", "''")
+            if apply_supp and suppressions is not None and not suppressions.empty:
+                sup = suppressions.copy(); sup['date'] = pd.to_datetime(sup['date']); con.register('sup_df', sup)
+                join_adjust = """
+                , sup AS (
+                    SELECT CAST(date AS DATE) AS d, winner, loser, dma_name, mover_ind, SUM(remove_units) AS remove_units
+                    FROM sup_df
+                    GROUP BY 1,2,3,4,5
+                ), grp AS (
+                    SELECT CAST(the_date AS DATE) AS d, winner, loser, dma_name, mover_ind,
+                           SUM(adjusted_wins) AS group_wins
+                    FROM filt
+                    GROUP BY 1,2,3,4,5
+                ), joined AS (
+                    SELECT f.*, COALESCE(s.remove_units, 0) AS remove_units,
+                           COALESCE(g.group_wins, 0) AS group_wins
+                    FROM filt f
+                    LEFT JOIN sup s
+                      ON CAST(f.the_date AS DATE)=s.d AND f.winner=s.winner AND f.loser=s.loser AND f.dma_name=s.dma_name AND f.mover_ind = s.mover_ind
+                    LEFT JOIN grp g
+                      ON CAST(f.the_date AS DATE)=g.d AND f.winner=g.winner AND f.loser=g.loser AND f.dma_name=g.dma_name AND f.mover_ind = g.mover_ind
+                ), adj AS (
+                    SELECT the_date, winner, loser, dma_name, mover_ind,
+                           GREATEST(0, adjusted_wins - (remove_units * (adjusted_wins / NULLIF(group_wins,0)))) AS adjusted_wins,
+                           adjusted_losses
+                    FROM joined
+                )
+                """
+                source_tbl = "adj"
+            else:
+                join_adjust = ""
+                source_tbl = "filt"
+
+            q = f"""
+            WITH ds AS (
+                SELECT * FROM parquet_scan('{ds_glob}')
+            ), filt AS (
+                SELECT the_date, winner, loser, dma_name, mover_ind, adjusted_wins, adjusted_losses FROM ds {where}
             )
+            {join_adjust}
+            , h2h AS (
+                SELECT the_date, loser AS competitor,
+                       SUM(adjusted_wins) AS h2h_wins,
+                       SUM(adjusted_losses) AS h2h_losses
+                FROM {source_tbl}
+                WHERE winner = '{primary_q}' AND loser IN ({comps_list})
+                GROUP BY 1,2
+            ), primary_tot AS (
+                SELECT the_date,
+                       SUM(adjusted_wins) AS primary_total_wins,
+                       SUM(adjusted_losses) AS primary_total_losses
+                FROM {source_tbl}
+                WHERE winner = '{primary_q}'
+                GROUP BY 1
+            )
+            SELECT h2h.the_date AS the_date,
+                   h2h.competitor AS winner,
+                   h2h.h2h_wins / NULLIF(primary_tot.primary_total_wins, 0) AS win_share,
+                   h2h.h2h_losses / NULLIF(primary_tot.primary_total_losses, 0) AS loss_share,
+                   h2h.h2h_wins / NULLIF(h2h.h2h_losses, 0) AS wins_per_loss
+                FROM h2h JOIN primary_tot USING (the_date)
+            ORDER BY 1,2
             """
-            source_tbl = "adj"
-        else:
-            join_adjust = ""
-            source_tbl = "filt"
-
-        q = f"""
-        WITH ds AS (
-            SELECT * FROM parquet_scan('{ds_glob}')
-        ), filt AS (
-            SELECT the_date, winner, loser, dma_name, mover_ind, adjusted_wins, adjusted_losses FROM ds {where}
-        )
-        {join_adjust}
-        , h2h AS (
-            SELECT the_date, loser AS competitor,
-                   SUM(adjusted_wins) AS h2h_wins,
-                   SUM(adjusted_losses) AS h2h_losses
-            FROM {source_tbl}
-            WHERE winner = '{primary_q}' AND loser IN ({comps_list})
-            GROUP BY 1,2
-        ), primary_tot AS (
-            SELECT the_date,
-                   SUM(adjusted_wins) AS primary_total_wins,
-                   SUM(adjusted_losses) AS primary_total_losses
-            FROM {source_tbl}
-            WHERE winner = '{primary_q}'
-            GROUP BY 1
-        )
-        SELECT h2h.the_date AS the_date,
-               h2h.competitor AS winner,
-               h2h.h2h_wins / NULLIF(primary_tot.primary_total_wins, 0) AS win_share,
-               h2h.h2h_losses / NULLIF(primary_tot.primary_total_losses, 0) AS loss_share,
-               h2h.h2h_wins / NULLIF(h2h.h2h_losses, 0) AS wins_per_loss
-        FROM h2h JOIN primary_tot USING (the_date)
-        ORDER BY 1,2
-        """
-        pdf = con.execute(q).df()
-        return pdf[['the_date','winner',metric]].sort_values(['the_date','winner'])
-    finally:
-        con.close()
-
+            pdf = con.execute(q).df()
+            return pdf[['the_date','winner',metric]].sort_values(['the_date','winner'])
+        finally:
+            con.close()
 
 def create_plot(pdf: pd.DataFrame, metric: str, analysis_mode="National", primary: str | None = None, label="Base") -> go.Figure:
     fig = go.Figure()
@@ -568,49 +620,62 @@ def create_plot(pdf: pd.DataFrame, metric: str, analysis_mode="National", primar
     return fig
 
 
-def compute_outliers_duckdb(ds_glob: str, filters: dict, winners: list, window: int = 14, z_thresh: float = 2.5) -> pd.DataFrame:
+def compute_outliers_duckdb(ds_glob: str, filters: dict, winners: list, window: int = 14, z_thresh: float = 2.5, start_date: str, end_date: str) -> pd.DataFrame:
     if not winners:
         return pd.DataFrame(columns=['the_date','winner','day_type','zscore'])
-    con = duckdb.connect()
-    try:
-        where = where_clause(filters)
-        winners_list = ",".join([f"'{str(w).replace("'","''")}'" for w in winners])
-        prev = max(1, int(window) - 1)
-        q = f"""
-        WITH ds AS (
-          SELECT * FROM parquet_scan('{ds_glob}')
-        ), filt AS (
-          SELECT * FROM ds {where}
-        ), market AS (
-          SELECT the_date, SUM(adjusted_wins) AS market_total_wins FROM filt GROUP BY 1
-        ), per_winner AS (
-          SELECT f.the_date, f.winner, SUM(f.adjusted_wins) AS total_wins FROM filt f GROUP BY 1,2
-        ), metrics AS (
-          SELECT p.the_date,
-                 p.winner,
-                 CASE WHEN strftime('%w', p.the_date)='6' THEN 'Sat'
-                      WHEN strftime('%w', p.the_date)='0' THEN 'Sun'
-                      ELSE 'Weekday' END AS day_type,
-                 p.total_wins / NULLIF(m.market_total_wins, 0) AS win_share
-          FROM per_winner p JOIN market m USING (the_date)
-          WHERE p.winner IN ({winners_list})
-        ), zcalc AS (
-          SELECT the_date, winner, day_type, win_share,
-                 COUNT(*) OVER (PARTITION BY winner, day_type ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) AS w_count,
-                 avg(win_share) OVER (PARTITION BY winner, day_type ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) AS w_mean,
-                 stddev_samp(win_share) OVER (PARTITION BY winner, day_type ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) AS w_std
-          FROM metrics
-        )
-        SELECT the_date, winner, day_type,
-               CASE WHEN w_std > 0 THEN (win_share - w_mean) / w_std ELSE 0 END AS zscore
-        FROM zcalc
-        WHERE ((CASE WHEN day_type IN ('Sat','Sun') THEN w_count >= 10 ELSE w_count >= {int(window)} END))
-          AND w_std > 0 AND ABS((win_share - w_mean) / w_std) > {float(z_thresh)}
-        ORDER BY 1,2
-        """
-        return con.execute(q).df()
-    finally:
-        con.close()
+
+    if is_simple_filter(filters):
+        # Use shared module
+        _ds = filters.get('ds', 'gamoshi')
+        _mover_ind = filters.get('mover_ind', 'False')
+        df = outliers.national_outliers(ds_glob, _ds, _mover_ind, start_date, end_date, window, z_thresh)
+        if df.empty:
+            return pd.DataFrame(columns=['the_date','winner','day_type','zscore'])
+        # Filter for selected winners
+        df = df[df['winner'].isin(winners)].copy()
+        return df
+    else:
+        # Fallback to legacy path
+        con = duckdb.connect()
+        try:
+            where = where_clause(filters)
+            winners_list = ",".join([f"'{str(w).replace("'","''")}'" for w in winners])
+            prev = max(1, int(window) - 1)
+            q = f"""
+            WITH ds AS (
+              SELECT * FROM parquet_scan('{ds_glob}')
+            ), filt AS (
+              SELECT * FROM ds {where}
+            ), market AS (
+              SELECT the_date, SUM(adjusted_wins) AS market_total_wins FROM filt GROUP BY 1
+            ), per_winner AS (
+              SELECT f.the_date, f.winner, SUM(f.adjusted_wins) AS total_wins FROM filt f GROUP BY 1,2
+            ), metrics AS (
+              SELECT p.the_date,
+                     p.winner,
+                     CASE WHEN strftime('%w', p.the_date)='6' THEN 'Sat'
+                          WHEN strftime('%w', p.the_date)='0' THEN 'Sun'
+                          ELSE 'Weekday' END AS day_type,
+                     p.total_wins / NULLIF(m.market_total_wins, 0) AS win_share
+              FROM per_winner p JOIN market m USING (the_date)
+              WHERE p.winner IN ({winners_list})
+            ), zcalc AS (
+              SELECT the_date, winner, day_type, win_share,
+                     COUNT(*) OVER (PARTITION BY winner, day_type ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) AS w_count,
+                     avg(win_share) OVER (PARTITION BY winner, day_type ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) AS w_mean,
+                     stddev_samp(win_share) OVER (PARTITION BY winner, day_type ORDER BY the_date ROWS BETWEEN {prev} PRECEDING AND CURRENT ROW) AS w_std
+              FROM metrics
+            )
+            SELECT the_date, winner, day_type,
+                   CASE WHEN w_std > 0 THEN (win_share - w_mean) / w_std ELSE 0 END AS zscore
+            FROM zcalc
+            WHERE ((CASE WHEN day_type IN ('Sat','Sun') THEN w_count >= 10 ELSE w_count >= {int(window)} END))
+              AND w_std > 0 AND ABS((win_share - w_mean) / w_std) > {float(z_thresh)}
+            ORDER BY 1,2
+            """
+            return con.execute(q).df()
+        finally:
+            con.close()
 
 
 def compute_ts_outliers(pdf: pd.DataFrame, window: int = 14, z_thresh: float = 2.5, positive_only: bool = False) -> pd.DataFrame:
@@ -702,6 +767,8 @@ def main():
     if not glob.glob(ds_glob, recursive=True):
         st.warning("No parquet files found in the dataset directory.")
 
+    global_min_date, global_max_date = get_min_max_dates(ds_glob)
+
     # Filters
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔧 Filters")
@@ -776,11 +843,11 @@ def main():
     # Compute base and suppressed series (plotting controlled below via toggle)
     filters = st.session_state.filters
     if analysis_mode == 'National':
-        base_pdf = compute_national_pdf(ds_glob, filters, winners, show_other=False, metric=metric, suppressions=None, apply_supp=False)
-        supp_pdf = compute_national_pdf(ds_glob, filters, winners, show_other=False, metric=metric, suppressions=sup_df, apply_supp=apply_supp)
+        base_pdf = compute_national_pdf(ds_glob, filters, winners, show_other=False, metric=metric, suppressions=None, apply_supp=False, start_date=global_min_date, end_date=global_max_date)
+        supp_pdf = compute_national_pdf(ds_glob, filters, winners, show_other=False, metric=metric, suppressions=sup_df, apply_supp=apply_supp, start_date=global_min_date, end_date=global_max_date)
     else:
-        base_pdf = compute_competitor_pdf(ds_glob, filters, primary, competitors, metric, suppressions=None, apply_supp=False)
-        supp_pdf = compute_competitor_pdf(ds_glob, filters, primary, competitors, metric, suppressions=sup_df, apply_supp=apply_supp)
+        base_pdf = compute_competitor_pdf(ds_glob, filters, primary, competitors, metric, suppressions=None, apply_supp=False, start_date=global_min_date, end_date=global_max_date)
+        supp_pdf = compute_competitor_pdf(ds_glob, filters, primary, competitors, metric, suppressions=sup_df, apply_supp=apply_supp, start_date=global_min_date, end_date=global_max_date)
 
     # Graph-level date filter (view-only)
     try:
@@ -896,7 +963,7 @@ def main():
     try:
         st.subheader("Before (Carrier-style with outliers)")
         fig_before = create_plot(base_view, metric, analysis_mode, primary if analysis_mode=='Competitor' else None, label="Base")
-        out_tbl = compute_outliers_duckdb(ds_glob, filters, winners if analysis_mode=='National' else [primary] + competitors if primary else winners, window=14, z_thresh=2.5)
+        out_tbl = compute_outliers_duckdb(ds_glob, filters, winners if analysis_mode=='National' else [primary] + competitors if primary else winners, window=14, z_thresh=2.5, start_date=global_min_date, end_date=global_max_date)
         if out_tbl is not None and not out_tbl.empty:
             out_view = out_tbl[(out_tbl['the_date'] >= pd.Timestamp(view_start)) & (out_tbl['the_date'] <= pd.Timestamp(view_end))].copy()
             for w in sorted(out_view['winner'].unique()):
