@@ -76,7 +76,7 @@ def build_partitioned_dataset(base: str, rules: str, geo: str, output_dir: str, 
 
         # Build query with detected geo columns
         state_sel = f", {state_col} AS state" if state_col else ", NULL::VARCHAR AS state"
-        query = f"""
+        final_query = f"""
         WITH base AS (
             SELECT * FROM parquet_scan('{base_glob}')
         ),
@@ -115,10 +115,56 @@ def build_partitioned_dataset(base: str, rules: str, geo: str, output_dir: str, 
         SELECT * FROM final
         """
 
+        # Register the final CTE as a temporary view for checks
+        con.execute(f"CREATE TEMPORARY VIEW final_data AS {final_query}")
+
+        # Check 1: Null keys
+        null_counts_query = """
+        SELECT
+            SUM(CASE WHEN winner IS NULL THEN 1 ELSE 0 END) AS null_winner,
+            SUM(CASE WHEN loser IS NULL THEN 1 ELSE 0 END) AS null_loser,
+            SUM(CASE WHEN dma_name IS NULL THEN 1 ELSE 0 END) AS null_dma_name
+        FROM final_data
+        """
+        null_counts = con.execute(null_counts_query).fetch_first()
+
+        if null_counts and (null_counts[0] > 0 or null_counts[1] > 0 or null_counts[2] > 0):
+            print(f"[ERROR] Found NULL keys in final data:", file=sys.stderr)
+            if null_counts[0] > 0: print(f"  - winner: {null_counts[0]} rows", file=sys.stderr)
+            if null_counts[1] > 0: print(f"  - loser: {null_counts[1]} rows", file=sys.stderr)
+            if null_counts[2] > 0: print(f"  - dma_name: {null_counts[2]} rows", file=sys.stderr)
+            # Sample problematic rows
+            sample_query = """
+            SELECT winner, loser, dma_name
+            FROM final_data
+            WHERE winner IS NULL OR loser IS NULL OR dma_name IS NULL
+            LIMIT 5
+            """
+            sample_df = con.execute(sample_query).df()
+            print("  Sample problematic rows:", file=sys.stderr)
+            print(sample_df.to_string(), file=sys.stderr)
+            return False
+        print("[INFO] Null key check passed.", file=sys.stderr)
+
+        # Check 2: DMA join coverage
+        coverage_query = """
+        SELECT
+            COUNT(*) AS total_rows,
+            SUM(CASE WHEN dma_name IS NOT NULL THEN 1 ELSE 0 END) AS mapped_dma_rows
+        FROM enr
+        """
+        coverage_counts = con.execute(coverage_query).fetch_first()
+
+        if coverage_counts and coverage_counts[0] > 0 and coverage_counts[1] < coverage_counts[0]:
+            unmapped_count = coverage_counts[0] - coverage_counts[1]
+            print(f"[ERROR] DMA join coverage failed: {unmapped_count} primary_geoid unmapped.", file=sys.stderr)
+            return False
+        print("[INFO] DMA join coverage check passed.", file=sys.stderr)
+
         copy_stmt = f"""
         COPY (
           SELECT * FROM (
-            {query}
+            {final_query}
           ) WHERE ds IS NOT NULL AND p_mover_ind IS NOT NULL AND the_date IS NOT NULL AND year IS NOT NULL AND month IS NOT NULL AND day IS NOT NULL
         ) TO '{output_dir}' (FORMAT PARQUET, PARTITION_BY (ds, p_mover_ind, year, month, day, the_date));
         """
