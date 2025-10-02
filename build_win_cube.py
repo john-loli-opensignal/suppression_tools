@@ -2,6 +2,7 @@
 import os
 import sys
 import argparse
+import duckdb
 
 from suppression_tools.src.outliers import cube_outliers
 
