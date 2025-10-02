@@ -257,6 +257,9 @@ def get_ranked_winners(ds_glob: str, filters: dict):
 
 @st.cache_data
 def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, show_other: bool, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
+    # Defensive local imports to avoid Streamlit cache scope issues
+    from suppression_tools.src import metrics as _metrics
+    from suppression_tools.src import outliers as _outliers
     if not selected_winners:
         return pd.DataFrame(columns=["the_date", "winner", metric])
     _ds = filters.get('ds', 'gamoshi')
@@ -264,13 +267,13 @@ def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, sh
     _state = filters.get('state') if filters else None
     _dma = filters.get('dma_name') if filters else None
 
-    base = metrics.national_timeseries(ds_glob, _ds, _mover_ind, start_date, end_date, state=_state, dma_name=_dma)
+    base = _metrics.national_timeseries(ds_glob, _ds, _mover_ind, start_date, end_date, state=_state, dma_name=_dma)
     if base.empty:
         return pd.DataFrame(columns=["the_date", "winner", metric])
     keep = base[['the_date', 'winner', metric]].copy()
     keep = keep[keep['winner'].isin(selected_winners)]
 
-    outs = outliers.national_outliers(ds_glob, _ds, _mover_ind, start_date, end_date, window, z_thresh, state=_state, dma_name=_dma)
+    outs = _outliers.national_outliers(ds_glob, _ds, _mover_ind, start_date, end_date, window, z_thresh, state=_state, dma_name=_dma)
     if not outs.empty:
         keep = keep.merge(
             outs[['the_date', 'winner', 'z', 'nat_outlier_pos']].rename(columns={'z': 'zscore', 'nat_outlier_pos': 'is_outlier'}),
@@ -297,6 +300,8 @@ def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, sh
 
 @st.cache_data
 def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
+    # Defensive local import to avoid Streamlit cache scope issues
+    from suppression_tools.src import metrics as _metrics
     if not primary or not competitors:
         return pd.DataFrame(columns=["the_date", "winner", metric])
 
@@ -305,7 +310,7 @@ def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitor
     _state = filters.get('state') if filters else None
     _dma = filters.get('dma_name') if filters else None
 
-    base = metrics.competitor_view(ds_glob, _ds, _mover_ind, start_date, end_date, primary, competitors, state=_state, dma_name=_dma)
+    base = _metrics.competitor_view(ds_glob, _ds, _mover_ind, start_date, end_date, primary, competitors, state=_state, dma_name=_dma)
     if base.empty:
         return pd.DataFrame(columns=["the_date", "winner", metric])
 
