@@ -11,6 +11,17 @@ def default_store_glob() -> str:
     return os.path.join(here, "duckdb_partitioned_store", "**", "*.parquet")
 
 
+def get_min_max_dates(ds_glob: str) -> tuple[str, str]:
+    con = duckdb.connect()
+    try:
+        q = f"SELECT MIN(the_date) AS min_date, MAX(the_date) AS max_date FROM parquet_scan('{ds_glob}')"
+        result = con.execute(q).fetch_first()
+        if result and result[0] and result[1]:
+            return str(result[0]), str(result[1])
+        return '2020-01-01', '2030-01-01' # Fallback
+    finally:
+        con.close()
+
 def build_win_cube(
     store_glob: str,
     ds: str,
@@ -51,13 +62,24 @@ def parse_args(argv=None):
 
 def main(argv=None):
     args = parse_args(argv)
+
+    _start_date = args.start_date
+    _end_date = args.end_date
+
+    if _start_date is None or _end_date is None:
+        global_min_date, global_max_date = get_min_max_dates(args.store)
+        if _start_date is None:
+            _start_date = global_min_date
+        if _end_date is None:
+            _end_date = global_max_date
+
     return build_win_cube(
         args.store,
         args.ds,
         args.mover_ind,
         args.output,
-        start_date=args.start_date,
-        end_date=args.end_date,
+        start_date=_start_date,
+        end_date=_end_date,
         only_outliers=(not args.all_rows),
     )
 
