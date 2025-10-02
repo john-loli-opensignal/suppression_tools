@@ -60,7 +60,7 @@ def national_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str,
         metric_expr = "n.nat_total_losses / NULLIF(m.market_total_losses, 0)"
     else:
         metric_expr = "n.nat_total_wins / NULLIF(n.nat_total_losses, 0)"
-    prev = max(1, int(window) - 1)
+    prev = max(2, int(window))
     sql = _render(tmpl, {
         'store_glob': store_glob,
         'ds': ds.replace("'", "''"),

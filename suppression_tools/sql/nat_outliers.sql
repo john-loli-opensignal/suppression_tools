@@ -30,21 +30,23 @@ WITH ds AS (
 ), typed_r AS (
   SELECT * FROM typed_all
   WHERE CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'
-), hist AS (
-  SELECT r.the_date, r.winner, r.day_type,
-         avg(h.metric_val) AS mu,
-         stddev_samp(h.metric_val) AS sigma,
-         COUNT(*) AS cnt
-  FROM typed_r r
-  JOIN typed_all h
-    ON h.winner=r.winner AND h.day_type=r.day_type
-   AND CAST(h.the_date AS DATE) < CAST(r.the_date AS DATE)
-   AND CAST(h.the_date AS DATE) >= CAST(r.the_date AS DATE) - INTERVAL {prev} DAY
-  GROUP BY 1,2,3
 )
 SELECT t.the_date, t.winner,
-       (CASE WHEN h.cnt>1 AND h.sigma>0 THEN ABS(t.metric_val - h.mu)/NULLIF(h.sigma,0) ELSE 0 END) AS z,
-       CASE WHEN (CASE WHEN h.cnt>1 AND h.sigma>0 THEN ABS(t.metric_val - h.mu)/NULLIF(h.sigma,0) ELSE 0 END) > {z_thresh} THEN TRUE ELSE FALSE END AS nat_outlier_pos
+       (CASE WHEN hist.cnt>1 AND hist.sigma>0 THEN ABS(t.metric_val - hist.mu)/NULLIF(hist.sigma,0) ELSE 0 END) AS z,
+       CASE WHEN (CASE WHEN hist.cnt>1 AND hist.sigma>0 THEN ABS(t.metric_val - hist.mu)/NULLIF(hist.sigma,0) ELSE 0 END) > {z_thresh} THEN TRUE ELSE FALSE END AS nat_outlier_pos
 FROM typed_r t
-LEFT JOIN hist h ON h.the_date=t.the_date AND h.winner=t.winner AND h.day_type=t.day_type
+LEFT JOIN LATERAL (
+  SELECT avg(s.metric_val) AS mu,
+         stddev_samp(s.metric_val) AS sigma,
+         COUNT(*) AS cnt
+  FROM (
+    SELECT h.metric_val
+    FROM typed_all h
+    WHERE h.winner = t.winner
+      AND h.day_type = t.day_type
+      AND CAST(h.the_date AS DATE) < CAST(t.the_date AS DATE)
+    ORDER BY h.the_date DESC
+    LIMIT {prev}
+  ) s
+) AS hist ON TRUE
 ORDER BY 1,2;
