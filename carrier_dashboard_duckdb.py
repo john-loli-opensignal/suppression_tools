@@ -273,7 +273,7 @@ def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, sh
     keep = base[['the_date', 'winner', metric]].copy()
     keep = keep[keep['winner'].isin(selected_winners)]
 
-    outs = _outliers.national_outliers(ds_glob, _ds, _mover_ind, start_date, end_date, window, z_thresh, state=_state, dma_name=_dma)
+    outs = _outliers.national_outliers(ds_glob, _ds, _mover_ind, start_date, end_date, window, z_thresh, state=_state, dma_name=_dma, metric=metric)
     if not outs.empty:
         keep = keep.merge(
             outs[['the_date', 'winner', 'z', 'nat_outlier_pos']].rename(columns={'z': 'zscore', 'nat_outlier_pos': 'is_outlier'}),

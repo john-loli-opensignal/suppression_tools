@@ -49,9 +49,18 @@ def _build_extra_filters(state: str | None, dma_name: str | None) -> str:
     return (" AND " + " AND ".join(filters)) if filters else ""
 
 
-def national_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, window: int = 14, z_thresh: float = 2.5, state: str | None = None, dma_name: str | None = None) -> pd.DataFrame:
+def national_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str, end_date: str, window: int = 14, z_thresh: float = 2.5, state: str | None = None, dma_name: str | None = None, metric: str = 'win_share') -> pd.DataFrame:
     tmpl = _load_sql('nat_outliers.sql')
     extra_filters = _build_extra_filters(state, dma_name)
+    m = (metric or 'win_share').strip()
+    m = m if m in ('win_share','loss_share','wins_per_loss') else 'win_share'
+    if m == 'win_share':
+        metric_expr = "n.nat_total_wins / NULLIF(m.market_total_wins, 0)"
+    elif m == 'loss_share':
+        metric_expr = "n.nat_total_losses / NULLIF(m.market_total_losses, 0)"
+    else:
+        metric_expr = "n.nat_total_wins / NULLIF(n.nat_total_losses, 0)"
+    prev = max(1, int(window) - 1)
     sql = _render(tmpl, {
         'store_glob': store_glob,
         'ds': ds.replace("'", "''"),
@@ -61,6 +70,8 @@ def national_outliers(store_glob: str, ds: str, mover_ind: str, start_date: str,
         'window': int(window),
         'z_thresh': float(z_thresh),
         'extra_filters': extra_filters,
+        'metric_expr': metric_expr,
+        'prev': int(prev),
     })
     con = _con()
     try:

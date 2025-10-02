@@ -1,5 +1,5 @@
 -- nat_outliers.sql
--- Inputs: {store_glob}, {ds}, {mover_ind}, {start_date}, {end_date}, {window}, {z_thresh}
+-- Inputs: {store_glob}, {ds}, {mover_ind}, {start_date}, {end_date}, {window}, {z_thresh}, {metric_expr}, {prev}
 WITH ds AS (
   SELECT * FROM parquet_scan('{store_glob}')
 ), filt AS (
@@ -9,14 +9,18 @@ WITH ds AS (
     AND CAST(the_date AS DATE) BETWEEN DATE '{start_date}' AND DATE '{end_date}'
     {extra_filters}
 ), market AS (
-  SELECT the_date, SUM(adjusted_wins) AS market_total_wins
+  SELECT the_date,
+         SUM(adjusted_wins) AS market_total_wins,
+         SUM(adjusted_losses) AS market_total_losses
   FROM filt GROUP BY 1
 ), nat AS (
-  SELECT the_date, winner, SUM(adjusted_wins) AS total_wins
+  SELECT the_date, winner,
+         SUM(adjusted_wins) AS nat_total_wins,
+         SUM(adjusted_losses) AS nat_total_losses
   FROM filt GROUP BY 1,2
 ), m AS (
   SELECT n.the_date, n.winner,
-         n.total_wins / NULLIF(market_total_wins, 0) AS win_share
+         {metric_expr} AS metric_val
   FROM nat n JOIN market m USING (the_date)
 ), typed AS (
   SELECT *, CASE WHEN strftime('%w', the_date)='6' THEN 'Sat'
@@ -25,20 +29,19 @@ WITH ds AS (
   FROM m
 ), hist AS (
   SELECT r.the_date, r.winner, r.day_type,
-         avg(h.win_share) AS mu,
-         stddev_samp(h.win_share) AS sigma,
+         avg(h.metric_val) AS mu,
+         stddev_samp(h.metric_val) AS sigma,
          COUNT(*) AS cnt
   FROM typed r
   JOIN typed h
     ON h.winner=r.winner AND h.day_type=r.day_type
-   AND CAST(h.the_date AS DATE) < CAST(r.the_date AS DATE)
-   AND CAST(h.the_date AS DATE) >= CAST(r.the_date AS DATE) - INTERVAL {window} DAY
+   AND CAST(h.the_date AS DATE) <= CAST(r.the_date AS DATE)
+   AND CAST(h.the_date AS DATE) >= CAST(r.the_date AS DATE) - INTERVAL {prev} DAY
   GROUP BY 1,2,3
 )
 SELECT t.the_date, t.winner,
-       (CASE WHEN h.cnt>1 AND h.sigma>0 THEN (t.win_share - h.mu)/NULLIF(h.sigma,0) ELSE 0 END) AS z,
-       CASE WHEN (CASE WHEN h.cnt>1 AND h.sigma>0 THEN (t.win_share - h.mu)/NULLIF(h.sigma,0) ELSE 0 END) > {z_thresh} THEN TRUE ELSE FALSE END AS nat_outlier_pos
+       (CASE WHEN h.cnt>1 AND h.sigma>0 THEN ABS(t.metric_val - h.mu)/NULLIF(h.sigma,0) ELSE 0 END) AS z,
+       CASE WHEN (CASE WHEN h.cnt>1 AND h.sigma>0 THEN ABS(t.metric_val - h.mu)/NULLIF(h.sigma,0) ELSE 0 END) > {z_thresh} THEN TRUE ELSE FALSE END AS nat_outlier_pos
 FROM typed t
 LEFT JOIN hist h ON h.the_date=t.the_date AND h.winner=t.winner AND h.day_type=t.day_type
 ORDER BY 1,2;
-
