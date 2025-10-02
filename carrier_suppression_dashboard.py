@@ -42,7 +42,7 @@ def get_min_max_dates(ds_glob: str) -> tuple[str, str]:
     con = duckdb.connect()
     try:
         q = f"SELECT MIN(the_date) AS min_date, MAX(the_date) AS max_date FROM parquet_scan('{ds_glob}')"
-        result = con.execute(q).fetch_first()
+        result = con.execute(q).fetchone()
         if result and result[0] and result[1]:
             return str(result[0]), str(result[1])
         return '2020-01-01', '2030-01-01' # Fallback
@@ -147,9 +147,13 @@ def load_suppressions(supp_dir: str) -> pd.DataFrame:
 
 
 def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, show_other: bool, metric: str,
-                         suppressions: pd.DataFrame | None, apply_supp: bool, start_date: str, end_date: str) -> pd.DataFrame:
+                         suppressions: pd.DataFrame | None = None, apply_supp: bool = False, start_date: str | None = None, end_date: str | None = None) -> pd.DataFrame:
     if not selected_winners:
         return pd.DataFrame(columns=["the_date", "winner", metric])
+    
+    # Default to full date range if not specified
+    if start_date is None or end_date is None:
+        start_date, end_date = get_min_max_dates(ds_glob)
 
     if is_simple_filter(filters):
         # Use shared module
@@ -158,11 +162,8 @@ def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, sh
         df = metrics.national_timeseries(ds_glob, _ds, _mover_ind, start_date, end_date)
         if df.empty:
             return pd.DataFrame(columns=["the_date", "winner", metric])
-        # Filter for selected winners and compute metric
+        # Filter for selected winners - metrics already computed in SQL
         df = df[df['winner'].isin(selected_winners)].copy()
-        df['win_share'] = df['total_wins'] / df['market_total_wins'].replace(0, pd.NA)
-        df['loss_share'] = df['total_losses'] / df['market_total_losses'].replace(0, pd.NA)
-        df['wins_per_loss'] = df['total_wins'] / df['total_losses'].replace(0, pd.NA)
         return df[['the_date', 'winner', metric]].dropna().sort_values(['the_date', 'winner'])
     else:
         # Fallback to legacy path
@@ -508,9 +509,13 @@ def compute_pair_qa_for_plan(ds_glob: str, filters: dict, plan_df: pd.DataFrame)
 
 
 def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitors: list, metric: str,
-                           suppressions: pd.DataFrame | None, apply_supp: bool, start_date: str, end_date: str) -> pd.DataFrame:
+                           suppressions: pd.DataFrame | None = None, apply_supp: bool = False, start_date: str | None = None, end_date: str | None = None) -> pd.DataFrame:
     if not primary or not competitors:
         return pd.DataFrame(columns=["the_date", "winner", metric])
+    
+    # Default to full date range if not specified
+    if start_date is None or end_date is None:
+        start_date, end_date = get_min_max_dates(ds_glob)
 
     if is_simple_filter(filters):
         # Use shared module
@@ -519,10 +524,13 @@ def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitor
         df = metrics.competitor_view(ds_glob, _ds, _mover_ind, start_date, end_date, primary, competitors)
         if df.empty:
             return pd.DataFrame(columns=["the_date", "winner", metric])
-        # Compute metric
-        df['win_share'] = df['h2h_wins'] / df['primary_total_wins'].replace(0, pd.NA)
-        df['loss_share'] = df['h2h_losses'] / df['primary_total_losses'].replace(0, pd.NA)
-        df['wins_per_loss'] = df['h2h_wins'] / df['h2h_losses'].replace(0, pd.NA)
+        # Compute requested metric from h2h counts
+        if metric == 'win_share':
+            df[metric] = df['h2h_wins'] / df['primary_total_wins'].replace(0, pd.NA)
+        elif metric == 'loss_share':
+            df[metric] = df['h2h_losses'] / df['primary_total_losses'].replace(0, pd.NA)
+        else:  # wins_per_loss
+            df[metric] = df['h2h_wins'] / df['h2h_losses'].replace(0, pd.NA)
         return df[['the_date', 'competitor', metric]].rename(columns={'competitor': 'winner'}).dropna().sort_values(['the_date', 'winner'])
     else:
         # Fallback to legacy path
@@ -620,9 +628,13 @@ def create_plot(pdf: pd.DataFrame, metric: str, analysis_mode="National", primar
     return fig
 
 
-def compute_outliers_duckdb(ds_glob: str, filters: dict, winners: list, window: int = 14, z_thresh: float = 2.5, start_date: str, end_date: str) -> pd.DataFrame:
+def compute_outliers_duckdb(ds_glob: str, filters: dict, winners: list, window: int = 14, z_thresh: float = 2.5, start_date: str | None = None, end_date: str | None = None) -> pd.DataFrame:
     if not winners:
         return pd.DataFrame(columns=['the_date','winner','day_type','zscore'])
+    
+    # Default to full date range if not specified
+    if start_date is None or end_date is None:
+        start_date, end_date = get_min_max_dates(ds_glob)
 
     if is_simple_filter(filters):
         # Use shared module
