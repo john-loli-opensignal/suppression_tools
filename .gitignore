@@ -1,6 +1,11 @@
 # Python
 __pycache__/
 *.pyc
+# Ensure recursive cache ignore
+**/__pycache__/
+
+# Local PR request text artifacts
+PR_*.txt
 
 # UV / venv
 .venv/
@@ -16,4 +21,3 @@ suppressions/processed/
 
 # Misc
 *.log
-
