@@ -2,18 +2,25 @@
 
 ## Overview
 
-Pre-aggregated cubes are **extremely fast** to query because they're already grouped by all indexed dimensions. Think of them as materialized views optimized for specific metrics.
+Pre-aggregated cubes are **extremely fast** to query because they're already grouped by all indexed dimensions. They live **inside the DuckDB database** as tables, not separate files.
 
 ## Cube Structure
 
-Each dataset (ds) produces **4 cubes**:
+Each dataset (ds) produces **4 cube tables** inside the database:
 
 ```
-{ds}_win_mover_cube.parquet       # Wins for movers
-{ds}_win_non_mover_cube.parquet   # Wins for non-movers  
-{ds}_loss_mover_cube.parquet      # Losses for movers
-{ds}_loss_non_mover_cube.parquet  # Losses for non-movers
+{ds}_win_mover_cube       # Wins for movers
+{ds}_win_non_mover_cube   # Wins for non-movers  
+{ds}_loss_mover_cube      # Losses for movers
+{ds}_loss_non_mover_cube  # Losses for non-movers
 ```
+
+**Benefits of tables vs. separate files:**
+- ✅ All in one database file (no extra files)
+- ✅ ACID transactions (atomic updates)
+- ✅ Incremental updates possible
+- ✅ DuckDB can optimize queries across tables
+- ✅ Still extremely fast with indexes
 
 ## Aggregation Dimensions
 
@@ -29,31 +36,25 @@ Each cube is pre-aggregated on **all indexed columns**:
 
 ## Building Cubes
 
-### Build for Default Dataset (gamoshi)
+### Build Cube Tables in Database (Recommended)
 ```bash
+# Build for default dataset (gamoshi)
+uv run build_cubes_in_db.py
+
+# Build for all datasets
+uv run build_cubes_in_db.py --all
+
+# List existing cube tables
+uv run build_cubes_in_db.py --list
+
+# Skip existing tables (incremental)
+uv run build_cubes_in_db.py --skip-existing
+```
+
+### Alternative: Build as Parquet Files (Legacy)
+```bash
+# If you need portable cube files
 uv run build_cubes_from_db.py
-```
-
-### Build for All Datasets
-```bash
-uv run build_cubes_from_db.py --all
-```
-
-### Custom Options
-```bash
-# Specific dataset
-uv run build_cubes_from_db.py --ds gamoshi
-
-# Custom output directory
-uv run build_cubes_from_db.py -o my_cubes/
-
-# Skip existing cubes (incremental)
-uv run build_cubes_from_db.py --skip-existing
-```
-
-### List Available Datasets
-```bash
-uv run build_cubes_from_db.py --list-datasets
 ```
 
 ## Performance
@@ -71,42 +72,68 @@ uv run build_cubes_from_db.py --list-datasets
 
 For typical dataset (30-60 days, ~50 carriers, ~200 DMAs):
 
-- **Database**: ~600-800 MB (all raw data)
-- **Win Mover Cube**: ~5-15 MB
-- **Win Non-Mover Cube**: ~20-40 MB  
-- **Loss Mover Cube**: ~5-15 MB
-- **Loss Non-Mover Cube**: ~20-40 MB
-- **Total Cubes**: ~50-120 MB (**10-15x smaller**)
+- **Database (raw data)**: ~600-800 MB
+- **Database with 4 cube tables**: ~650-900 MB (**~50-100MB overhead**)
+- **Alternative: 4 separate parquet files**: ~50-120 MB (but requires managing separate files)
 
 ## Querying Cubes
 
-### Direct with DuckDB
+### Using Helper Functions (Easiest)
 
 ```python
-import duckdb
+from suppression_tools import db
+
+# Get national daily wins for non-movers
+df = db.get_national_from_cube(
+    ds='gamoshi',
+    metric='win',
+    mover_ind=False,
+    start_date='2025-01-01',
+    end_date='2025-12-31'
+)
+
+# Query cube with custom filter
+df = db.query_cube(
+    ds='gamoshi',
+    metric='win',
+    mover_ind=False,
+    sql_filter="winner = 'AT&T' AND state = 'CA'"
+)
+
+# List all cube tables
+cubes = db.list_cube_tables()
+print(cubes)
+```
+
+### Direct SQL Queries
+
+```python
+from suppression_tools import db
 
 # National wins per day for AT&T
-con = duckdb.connect()
-df = con.execute("""
+df = db.query("""
     SELECT the_date, SUM(total_wins) as daily_wins
-    FROM 'cubes/gamoshi_win_non_mover_cube.parquet'
+    FROM gamoshi_win_non_mover_cube
     WHERE winner = 'AT&T'
     GROUP BY the_date
     ORDER BY the_date
-""").df()
-con.close()
+""")
 ```
 
-### With Pandas
+### With DuckDB Connection
 
 ```python
-import pandas as pd
+from suppression_tools import db
 
-# Load cube
-df = pd.read_parquet('cubes/gamoshi_win_non_mover_cube.parquet')
-
-# Filter and aggregate
-att_wins = df[df['winner'] == 'AT&T'].groupby('the_date')['total_wins'].sum()
+con = db.connect()
+try:
+    df = con.execute("""
+        SELECT the_date, winner, SUM(total_wins) as wins
+        FROM gamoshi_win_non_mover_cube
+        GROUP BY the_date, winner
+    """).df()
+finally:
+    con.close()
 ```
 
 ## Common Use Cases
@@ -114,32 +141,32 @@ att_wins = df[df['winner'] == 'AT&T'].groupby('the_date')['total_wins'].sum()
 ### 1. National Daily Wins by Carrier
 
 ```python
-import duckdb
+from suppression_tools import db
 
-con = duckdb.connect()
-df = con.execute("""
+df = db.query("""
     SELECT 
         the_date,
         winner,
         SUM(total_wins) as national_wins
-    FROM 'cubes/gamoshi_win_non_mover_cube.parquet'
+    FROM gamoshi_win_non_mover_cube
     WHERE the_date >= DATE '2025-01-01'
     GROUP BY the_date, winner
     ORDER BY the_date, winner
-""").df()
+""")
 ```
 
 ### 2. Win Share by Carrier
 
 ```python
-con = duckdb.connect()
-df = con.execute("""
+from suppression_tools import db
+
+df = db.query("""
     WITH daily_totals AS (
         SELECT 
             the_date,
             winner,
             SUM(total_wins) as wins
-        FROM 'cubes/gamoshi_win_non_mover_cube.parquet'
+        FROM gamoshi_win_non_mover_cube
         GROUP BY the_date, winner
     ),
     market_totals AS (
@@ -158,47 +185,50 @@ df = con.execute("""
     FROM daily_totals d
     JOIN market_totals m USING (the_date)
     ORDER BY the_date, winner
-""").df()
+""")
 ```
 
 ### 3. State-Level Aggregation
 
 ```python
-con = duckdb.connect()
-df = con.execute("""
+from suppression_tools import db
+
+df = db.query("""
     SELECT 
         state,
         winner,
         SUM(total_wins) as total_wins
-    FROM 'cubes/gamoshi_win_non_mover_cube.parquet'
+    FROM gamoshi_win_non_mover_cube
     WHERE state IN ('CA', 'TX', 'FL', 'NY')
     GROUP BY state, winner
     ORDER BY state, total_wins DESC
-""").df()
+""")
 ```
 
 ### 4. Head-to-Head by DMA
 
 ```python
-con = duckdb.connect()
-df = con.execute("""
+from suppression_tools import db
+
+df = db.query("""
     SELECT 
         dma_name,
         state,
         SUM(total_wins) as att_wins_vs_vzw
-    FROM 'cubes/gamoshi_win_non_mover_cube.parquet'
+    FROM gamoshi_win_non_mover_cube
     WHERE winner = 'AT&T' AND loser = 'Verizon'
     GROUP BY dma_name, state
     ORDER BY att_wins_vs_vzw DESC
     LIMIT 20
-""").df()
+""")
 ```
 
 ### 5. Day of Week Patterns
 
 ```python
-con = duckdb.connect()
-df = con.execute("""
+from suppression_tools import db
+
+df = db.query("""
     SELECT 
         day_of_week,
         CASE day_of_week
@@ -218,28 +248,30 @@ df = con.execute("""
             the_date,
             winner,
             SUM(total_wins) as daily_wins
-        FROM 'cubes/gamoshi_win_non_mover_cube.parquet'
+        FROM gamoshi_win_non_mover_cube
         GROUP BY day_of_week, the_date, winner
     )
     GROUP BY day_of_week, winner
     ORDER BY day_of_week, winner
-""").df()
+""")
 ```
 
 ## When to Use Cubes vs Database
 
-### Use Cubes When:
+### Use Cube Tables When:
 - ✅ You need repeated queries on the same dimensions
 - ✅ You're building dashboards with multiple views
 - ✅ You want maximum query speed (<10ms)
 - ✅ You're analyzing specific metric types (wins or losses)
 - ✅ Your queries filter by indexed dimensions
+- ✅ You want everything in one database file
 
-### Use Database Directly When:
+### Use Raw carrier_data Table When:
 - ✅ You need the raw, unaggregated data
 - ✅ You need dimensions not in the cube (e.g., `primary_geoid`)
 - ✅ You're doing one-off exploratory queries
 - ✅ You need to join with other tables/data
+- ✅ You need record-level detail
 
 ## Workflow
 
@@ -249,27 +281,35 @@ Raw Parquet
     uv run build_suppression_db.py
     ↓
 DuckDB Database (duck_suppression.db)
-    ↓
-    uv run build_cubes_from_db.py
-    ↓
-Pre-aggregated Cubes (cubes/*.parquet)
-    ↓
+  ├─ carrier_data table (raw data)
+  └─ (optional) cube tables
+         ↓
+         uv run build_cubes_in_db.py
+         ↓
+  ├─ {ds}_win_mover_cube
+  ├─ {ds}_win_non_mover_cube
+  ├─ {ds}_loss_mover_cube
+  └─ {ds}_loss_non_mover_cube
+         ↓
 Fast Queries & Dashboards
 ```
 
 ## Rebuilding Cubes
 
-Rebuild cubes whenever:
+Rebuild cube tables whenever:
 - Database is updated with new data
 - You need cubes for a new dataset
 - Cube schema changes
 
 ```bash
-# Rebuild all cubes
-uv run build_cubes_from_db.py --all
+# Rebuild all cube tables
+uv run build_cubes_in_db.py --all
 
 # Or rebuild just one dataset
-uv run build_cubes_from_db.py --ds gamoshi
+uv run build_cubes_in_db.py --ds gamoshi
+
+# Check what cube tables exist
+uv run build_cubes_in_db.py --list
 ```
 
 ## Best Practices
@@ -282,60 +322,51 @@ uv run build_cubes_from_db.py --ds gamoshi
 
 ## Troubleshooting
 
-### Cube File Not Found
+### Cube Table Not Found
 ```
-FileNotFoundError: cubes/gamoshi_win_non_mover_cube.parquet
+Table gamoshi_win_non_mover_cube does not exist
 ```
-**Solution**: Run `uv run build_cubes_from_db.py` to generate cubes
+**Solution**: Run `uv run build_cubes_in_db.py` to generate cube tables
 
 ### Cube Data Looks Stale
-**Solution**: Rebuild cubes after database updates
+**Solution**: Rebuild cube tables after database updates
 ```bash
-uv run build_cubes_from_db.py --ds gamoshi
+uv run build_cubes_in_db.py --ds gamoshi
 ```
 
-### Out of Memory Loading Cube
-**Solution**: Query the cube with DuckDB instead of loading into Pandas
-```python
-# Instead of: df = pd.read_parquet('cube.parquet')
-# Use:
-con = duckdb.connect()
-df = con.execute("SELECT * FROM 'cube.parquet' WHERE ...").df()
+### Want to See All Cubes
+```bash
+uv run build_cubes_in_db.py --list
 ```
 
 ## Example: Complete Analysis Pipeline
 
 ```python
-import duckdb
-
-# Connect once
-con = duckdb.connect()
+from suppression_tools import db
 
 # 1. National trend
-national = con.execute("""
+national = db.query("""
     SELECT the_date, winner, SUM(total_wins) as wins
-    FROM 'cubes/gamoshi_win_non_mover_cube.parquet'
+    FROM gamoshi_win_non_mover_cube
     GROUP BY the_date, winner
-""").df()
+""")
 
 # 2. State breakdown
-states = con.execute("""
+states = db.query("""
     SELECT state, winner, SUM(total_wins) as wins
-    FROM 'cubes/gamoshi_win_non_mover_cube.parquet'
+    FROM gamoshi_win_non_mover_cube
     GROUP BY state, winner
-""").df()
+""")
 
 # 3. Head-to-head
-h2h = con.execute("""
+h2h = db.query("""
     SELECT 
         the_date,
         SUM(total_wins) as att_wins
-    FROM 'cubes/gamoshi_win_non_mover_cube.parquet'
+    FROM gamoshi_win_non_mover_cube
     WHERE winner = 'AT&T' AND loser = 'Verizon'
     GROUP BY the_date
-""").df()
-
-con.close()
+""")
 
 # Now you have 3 DataFrames ready for visualization!
 ```

@@ -363,3 +363,109 @@ def get_db_size(db_path: Optional[str] = None) -> dict:
         'size_mb': size_mb,
         'size_gb': size_gb,
     }
+
+
+# Cube table query helpers
+
+def query_cube(
+    ds: str,
+    metric: str,  # 'win' or 'loss'
+    mover_ind: bool,
+    sql_filter: Optional[str] = None,
+    db_path: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    Query a cube table with optional filters.
+    
+    Args:
+        ds: Dataset name (e.g., 'gamoshi')
+        metric: 'win' or 'loss'
+        mover_ind: True for movers, False for non-movers
+        sql_filter: Optional WHERE clause (without WHERE keyword)
+        db_path: Path to database file
+        
+    Returns:
+        Query results as pandas DataFrame
+        
+    Example:
+        # Get AT&T wins for non-movers in California
+        df = query_cube('gamoshi', 'win', False, 
+                       sql_filter="winner = 'AT&T' AND state = 'CA'")
+    """
+    mover_str = "mover" if mover_ind else "non_mover"
+    table_name = f"{ds}_{metric}_{mover_str}_cube"
+    
+    where_clause = f"WHERE {sql_filter}" if sql_filter else ""
+    sql = f"SELECT * FROM {table_name} {where_clause}"
+    
+    return query(sql, db_path)
+
+
+def get_national_from_cube(
+    ds: str,
+    metric: str,  # 'win' or 'loss'
+    mover_ind: bool,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db_path: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    Get national daily aggregates from cube table.
+    
+    Args:
+        ds: Dataset name
+        metric: 'win' or 'loss'
+        mover_ind: True for movers, False for non-movers
+        start_date: Optional start date (YYYY-MM-DD)
+        end_date: Optional end date (YYYY-MM-DD)
+        db_path: Path to database file
+        
+    Returns:
+        DataFrame with national daily aggregates by carrier
+    """
+    mover_str = "mover" if mover_ind else "non_mover"
+    table_name = f"{ds}_{metric}_{mover_str}_cube"
+    
+    filters = []
+    if start_date:
+        filters.append(f"the_date >= DATE '{start_date}'")
+    if end_date:
+        filters.append(f"the_date <= DATE '{end_date}'")
+    
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+    
+    sql = f"""
+    SELECT 
+        the_date,
+        winner,
+        SUM(total_{metric}s) as total_{metric}s
+    FROM {table_name}
+    {where_clause}
+    GROUP BY the_date, winner
+    ORDER BY the_date, winner
+    """
+    
+    return query(sql, db_path)
+
+
+def list_cube_tables(db_path: Optional[str] = None) -> list[str]:
+    """
+    List all cube tables in the database.
+    
+    Args:
+        db_path: Path to database file
+        
+    Returns:
+        List of cube table names
+    """
+    con = connect(db_path, read_only=True)
+    try:
+        result = con.execute("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name LIKE '%_cube'
+            ORDER BY table_name
+        """).fetchall()
+        return [row[0] for row in result]
+    finally:
+        con.close()
