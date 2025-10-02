@@ -20,7 +20,8 @@ from datetime import timedelta
 import duckdb
 import pandas as pd
 
-from suppression_tools.src.plan import base_national_series, scan_base_outliers
+from suppression_tools.src.plan import base_national_series
+from suppression_tools.src.outliers import national_outliers
 
 
 def find_store_glob() -> str:
@@ -100,7 +101,7 @@ def main(argv=None) -> int:
     print('[OK] base_national_series rows:', len(base_df))
 
     # scan_base_outliers (may be empty for tiny windows; just check columns)
-    out_df = scan_base_outliers(store_glob, args.ds, args.mover_ind, start, end, window=14, z_thresh=2.5)
+    out_df = national_outliers(store_glob, args.ds, args.mover_ind, start, end, window=14, z_thresh=2.5)
     if not set(['the_date','winner']).issubset(out_df.columns):
         print('[FAIL] scan_base_outliers missing required columns')
         return 2
