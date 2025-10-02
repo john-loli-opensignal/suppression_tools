@@ -140,12 +140,17 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
 
                 # Positive (stars)
                 if not pos_out.empty:
-                    if zvals is not None and dayt is not None:
+                    # Guard: metric column may be missing under rare cache paths; fall back to smoothed line
+                    has_metric = metric in pos_out.columns
+                    vals_pos = pd.to_numeric(pos_out[metric], errors='coerce') if has_metric else None
+                    if zvals is not None and dayt is not None and has_metric:
                         hover_o_pos = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}<br>z: {z}<br>{dt}"
-                                       for d, v, z, dt in zip(pos_out['the_date'], pos_out[metric], pos_out['zscore'].round(2).astype(str), pos_out['day_type'])]
+                                       for d, v, z, dt in zip(pos_out['the_date'], vals_pos.fillna(0), pos_out['zscore'].round(2).astype(str), pos_out['day_type'])]
+                    elif has_metric:
+                        hover_o_pos = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}" for d, v in zip(pos_out['the_date'], vals_pos.fillna(0))]
                     else:
-                        hover_o_pos = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}" for d, v in zip(pos_out['the_date'], pos_out[metric])]
-                    y_marker_pos = (smooth.loc[pos_out.index] if isinstance(smooth, pd.Series) and smoothing_on else pos_out[metric])
+                        hover_o_pos = [f"{carrier}<br>{d.date()}" for d in pos_out['the_date']]
+                    y_marker_pos = (smooth.loc[pos_out.index] if isinstance(smooth, pd.Series) and smoothing_on else (vals_pos if has_metric else None))
                     fig.add_trace(go.Scatter(
                         x=pos_out['the_date'], y=y_marker_pos,
                         mode='markers', name=f"{carrier} outlier (+)",
@@ -156,9 +161,15 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
 
                 # Negative (minus signs)
                 if not neg_out.empty:
-                    hover_o_neg = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}<br>z: {z}<br>{dt}"
-                                   for d, v, z, dt in zip(neg_out['the_date'], neg_out[metric], neg_out['zscore'].round(2).astype(str), neg_out['day_type'])]
-                    y_marker_neg = (smooth.loc[neg_out.index] if isinstance(smooth, pd.Series) and smoothing_on else neg_out[metric])
+                    has_metric_n = metric in neg_out.columns
+                    vals_neg = pd.to_numeric(neg_out[metric], errors='coerce') if has_metric_n else None
+                    if has_metric_n:
+                        hover_o_neg = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}<br>z: {z}<br>{dt}"
+                                       for d, v, z, dt in zip(neg_out['the_date'], vals_neg.fillna(0), neg_out['zscore'].round(2).astype(str), neg_out['day_type'])]
+                    else:
+                        hover_o_neg = [f"{carrier}<br>{d.date()}<br>z: {z}<br>{dt}"
+                                       for d, z, dt in zip(neg_out['the_date'], neg_out['zscore'].round(2).astype(str), neg_out['day_type'])]
+                    y_marker_neg = (smooth.loc[neg_out.index] if isinstance(smooth, pd.Series) and smoothing_on else (vals_neg if has_metric_n else None))
                     fig.add_trace(go.Scatter(
                         x=neg_out['the_date'], y=y_marker_neg,
                         mode='markers', name=f"{carrier} outlier (-)",
