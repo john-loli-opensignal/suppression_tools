@@ -16,6 +16,40 @@ from suppression_tools.src import metrics
 from suppression_tools.src import outliers
 
 
+# Cache expensive min/max date queries
+@st.cache_data(ttl=3600)
+def get_min_max_dates_cached(ds_glob: str) -> tuple[str, str]:
+    """Cached wrapper for get_min_max_dates to avoid repeated scans."""
+    return get_min_max_dates(ds_glob)
+
+
+# Cache data queries with TTL and size limit
+@st.cache_data(ttl=600, max_entries=20)
+def compute_national_pdf_cached(ds_glob: str, filters_hash: str, selected_winners: tuple, show_other: bool, 
+                                metric: str, apply_supp: bool, start_date: str, end_date: str) -> pd.DataFrame:
+    """Cached wrapper for compute_national_pdf."""
+    filters = json.loads(filters_hash)
+    return compute_national_pdf(ds_glob, filters, list(selected_winners), show_other, metric, 
+                               suppressions=None, apply_supp=False, start_date=start_date, end_date=end_date)
+
+
+@st.cache_data(ttl=600, max_entries=20)
+def compute_competitor_pdf_cached(ds_glob: str, filters_hash: str, primary: str, competitors: tuple,
+                                 metric: str, apply_supp: bool, start_date: str, end_date: str) -> pd.DataFrame:
+    """Cached wrapper for compute_competitor_pdf."""
+    filters = json.loads(filters_hash)
+    return compute_competitor_pdf(ds_glob, filters, primary, list(competitors), metric,
+                                 suppressions=None, apply_supp=False, start_date=start_date, end_date=end_date)
+
+
+@st.cache_data(ttl=600, max_entries=10)
+def compute_outliers_duckdb_cached(ds_glob: str, filters_hash: str, winners: tuple, window: int, 
+                                   z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
+    """Cached wrapper for compute_outliers_duckdb."""
+    filters = json.loads(filters_hash)
+    return compute_outliers_duckdb(ds_glob, filters, list(winners), window, z_thresh, start_date, end_date)
+
+
 def is_simple_filter(filters: dict) -> bool:
     """Returns True if filters only contain 'ds' and 'mover_ind' keys, False otherwise."""
     if not filters:
@@ -779,7 +813,7 @@ def main():
     if not glob.glob(ds_glob, recursive=True):
         st.warning("No parquet files found in the dataset directory.")
 
-    global_min_date, global_max_date = get_min_max_dates(ds_glob)
+    global_min_date, global_max_date = get_min_max_dates_cached(ds_glob)
 
     # Filters
     st.sidebar.markdown("---")
@@ -791,6 +825,99 @@ def main():
             st.session_state.filters[col] = st.sidebar.selectbox("mover_ind", options=['All','True','False'], index=['All','True','False'].index(current if current in ['All','True','False'] else 'All'))
         else:
             st.session_state.filters[col] = st.sidebar.text_input(col, value=current if current!='All' else 'gamoshi')
+
+    # Analysis configuration section
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📈 Chart Options")
+    analysis_mode = st.sidebar.selectbox("Analysis Mode", ["National", "Competitor"], index=0)
+    metric = st.sidebar.selectbox("Metric", ["win_share","loss_share","wins_per_loss"], index=0)
+
+    # Winners and competitors
+    if analysis_mode == 'National':
+        winners_text = st.sidebar.text_input(
+            "Winners (comma-separated)",
+            value="Spectrum, Comcast, T-Mobile FWA, AT&T, Verizon FWA, Frontier, Verizon, Cox Communications, Altice, CenturyLink"
+        )
+        winners = [w.strip() for w in winners_text.split(',') if w.strip()]
+        primary=None; competitors=[]
+    else:
+        primary = st.sidebar.text_input("Primary winner", value="AT&T")
+        competitors_text = st.sidebar.text_input("Competitors (comma-separated)", value="Comcast,Spectrum,Verizon,T-Mobile FWA")
+        competitors = [c.strip() for c in competitors_text.split(',') if c.strip()]
+        winners=[]
+
+    # Date range selection - DISPLAY RANGE
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🗓️ Display Date Range")
+    st.sidebar.caption("📊 Data shown in charts (outliers need more history)")
+    
+    # Default to last 90 days for better performance
+    try:
+        default_end = pd.to_datetime(global_max_date).date()
+        default_start = (pd.to_datetime(global_max_date) - pd.Timedelta(days=90)).date()
+    except:
+        default_start = date(2025, 1, 1)
+        default_end = date(2025, 3, 31)
+    
+    display_start = st.sidebar.date_input("Display Start", value=default_start, key='display_start',
+                                         help="Start date to display in charts")
+    display_end = st.sidebar.date_input("Display End", value=default_end, key='display_end',
+                                       help="End date to display in charts")
+    
+    # Outlier parameters
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔍 Outlier Detection")
+    outlier_window = st.sidebar.number_input("Rolling window (days)", min_value=7, max_value=90, value=14, step=1,
+                                            help="Window size for rolling statistics (DOW-partitioned)")
+    outlier_z_thresh = st.sidebar.number_input("Z-score threshold", min_value=1.0, max_value=5.0, value=2.5, step=0.1,
+                                               help="Minimum z-score to flag as outlier")
+    lookback_days = st.sidebar.number_input("Lookback buffer (days)", min_value=30, max_value=180, value=56, step=7,
+                                           help="Extra days before display range for proper rolling stats (2x window recommended)")
+    
+    # Calculate query range (display + lookback for outliers)
+    try:
+        query_start = (pd.to_datetime(display_start) - pd.Timedelta(days=int(lookback_days))).date()
+        query_end = display_end
+    except:
+        query_start = display_start
+        query_end = display_end
+    
+    st.sidebar.caption(f"⚙️ Query range: {query_start} to {query_end}")
+    st.sidebar.caption(f"📏 Total days to load: {(query_end - query_start).days + 1}")
+    
+    # Validation
+    validation_errors = []
+    if not st.session_state.filters.get('ds') or st.session_state.filters.get('ds') == 'All':
+        validation_errors.append("⚠️ Data source (ds) must be set")
+    if not st.session_state.filters.get('mover_ind') or st.session_state.filters.get('mover_ind') == 'All':
+        validation_errors.append("⚠️ Mover indicator (mover_ind) must be set")
+    if analysis_mode == 'National':
+        if not winners or len(winners) == 0:
+            validation_errors.append("⚠️ At least one winner must be specified")
+    else:
+        if not primary:
+            validation_errors.append("⚠️ Primary winner must be specified")
+        if not competitors or len(competitors) == 0:
+            validation_errors.append("⚠️ At least one competitor must be specified")
+    
+    # Show validation status
+    if validation_errors:
+        for err in validation_errors:
+            st.sidebar.error(err)
+    else:
+        st.sidebar.success("✅ Ready to run")
+    
+    # Single RUN button
+    st.sidebar.markdown("---")
+    run_analysis = st.sidebar.button("🚀 RUN ANALYSIS", type="primary", disabled=bool(validation_errors),
+                                    help="Load data and compute outliers with current parameters")
+    
+    # Initialize session state for data persistence
+    if 'last_run_params' not in st.session_state:
+        st.session_state.last_run_params = None
+        st.session_state.base_pdf = pd.DataFrame()
+        st.session_state.supp_pdf = pd.DataFrame()
+        st.session_state.out_tbl = pd.DataFrame()
 
     # Suppression controls
     st.sidebar.markdown("---")
@@ -826,25 +953,6 @@ def main():
                 st.success(f"Saved {path}")
                 st.rerun()
 
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📈 Chart Options")
-    analysis_mode = st.sidebar.selectbox("Analysis Mode", ["National", "Competitor"], index=0)
-    metric = st.sidebar.selectbox("Metric", ["win_share","loss_share","wins_per_loss"], index=0)
-
-    # Winners and competitors
-    if analysis_mode == 'National':
-        winners_text = st.sidebar.text_input(
-            "Winners (comma-separated)",
-            value="Spectrum, Comcast, T-Mobile FWA, AT&T, Verizon FWA, Frontier, Verizon, Cox Communications, Altice, CenturyLink"
-        )
-        winners = [w.strip() for w in winners_text.split(',') if w.strip()]
-        primary=None; competitors=[]
-    else:
-        primary = st.sidebar.text_input("Primary winner", value="AT&T")
-        competitors_text = st.sidebar.text_input("Competitors (comma-separated)", value="Comcast,Spectrum,Verizon,T-Mobile FWA")
-        competitors = [c.strip() for c in competitors_text.split(',') if c.strip()]
-        winners=[]
-
     # Compose combined suppressions (loaded + pending)
     sup_df = loaded.copy()
     if st.session_state.supp_rows:
@@ -852,44 +960,102 @@ def main():
         add['date'] = pd.to_datetime(add['date']).dt.date
         sup_df = pd.concat([sup_df, add], ignore_index=True)
 
-    # Compute base and suppressed series (plotting controlled below via toggle)
-    filters = st.session_state.filters
-    if analysis_mode == 'National':
-        base_pdf = compute_national_pdf(ds_glob, filters, winners, show_other=False, metric=metric, suppressions=None, apply_supp=False, start_date=global_min_date, end_date=global_max_date)
-        supp_pdf = compute_national_pdf(ds_glob, filters, winners, show_other=False, metric=metric, suppressions=sup_df, apply_supp=apply_supp, start_date=global_min_date, end_date=global_max_date)
-    else:
-        base_pdf = compute_competitor_pdf(ds_glob, filters, primary, competitors, metric, suppressions=None, apply_supp=False, start_date=global_min_date, end_date=global_max_date)
-        supp_pdf = compute_competitor_pdf(ds_glob, filters, primary, competitors, metric, suppressions=sup_df, apply_supp=apply_supp, start_date=global_min_date, end_date=global_max_date)
+    # Track parameters to detect changes
+    current_params = {
+        'analysis_mode': analysis_mode,
+        'winners': tuple(sorted(winners)) if winners else (),
+        'primary': primary,
+        'competitors': tuple(sorted(competitors)) if competitors else (),
+        'metric': metric,
+        'filters': json.dumps(st.session_state.filters, sort_keys=True),
+        'query_start': str(query_start),
+        'query_end': str(query_end),
+        'outlier_window': outlier_window,
+        'outlier_z_thresh': outlier_z_thresh,
+        'apply_supp': apply_supp,
+        'supp_hash': hash(str(sorted(sup_df.to_dict('records')))) if not sup_df.empty else 0
+    }
+    
+    # Only query data if RUN button clicked
+    if run_analysis and not validation_errors:
+        st.session_state.last_run_params = current_params
+        
+        # Use cached queries with date range limits
+        filters_hash = json.dumps(st.session_state.filters, sort_keys=True)
+        
+        progress_bar = st.progress(0, text="🔄 Starting analysis...")
+        
+        try:
+            # Step 1: Load base time series data (national-level aggregation)
+            progress_bar.progress(20, text="📊 Loading base time series...")
+            if analysis_mode == 'National':
+                base_pdf = compute_national_pdf_cached(
+                    ds_glob, filters_hash, tuple(sorted(winners)), False, metric, False,
+                    str(query_start), str(query_end)
+                )
+                # Suppressed version (not cached since suppressions change frequently)
+                progress_bar.progress(40, text="🗜️ Applying suppressions...")
+                supp_pdf = compute_national_pdf(
+                    ds_glob, st.session_state.filters, winners, show_other=False, metric=metric,
+                    suppressions=sup_df, apply_supp=apply_supp, start_date=str(query_start), end_date=str(query_end)
+                )
+            else:
+                base_pdf = compute_competitor_pdf_cached(
+                    ds_glob, filters_hash, primary, tuple(sorted(competitors)), metric, False,
+                    str(query_start), str(query_end)
+                )
+                progress_bar.progress(40, text="🗜️ Applying suppressions...")
+                supp_pdf = compute_competitor_pdf(
+                    ds_glob, st.session_state.filters, primary, competitors, metric,
+                    suppressions=sup_df, apply_supp=apply_supp, start_date=str(query_start), end_date=str(query_end)
+                )
+            
+            # Step 2: Compute outliers on national aggregated data
+            progress_bar.progress(60, text="🔍 Detecting outliers (national-level)...")
+            target_winners = tuple(sorted(winners)) if analysis_mode=='National' else tuple(sorted([primary] + competitors)) if primary else ()
+            
+            out_tbl = compute_outliers_duckdb_cached(
+                ds_glob, filters_hash, target_winners, int(outlier_window), float(outlier_z_thresh),
+                str(query_start), str(query_end)
+            )
+            
+            # Store in session state
+            progress_bar.progress(80, text="💾 Caching results...")
+            st.session_state.base_pdf = base_pdf
+            st.session_state.supp_pdf = supp_pdf
+            st.session_state.out_tbl = out_tbl
+            
+            progress_bar.progress(100, text="✅ Analysis complete!")
+            st.success(f"✅ Loaded {len(base_pdf)} time series rows, found {len(out_tbl)} outlier dates")
+            
+        except Exception as e:
+            st.error(f"❌ Analysis failed: {str(e)}")
+            st.exception(e)
+        finally:
+            progress_bar.empty()
+    
+    # Use cached data from session state
+    base_pdf = st.session_state.get('base_pdf', pd.DataFrame())
+    supp_pdf = st.session_state.get('supp_pdf', pd.DataFrame())
+    out_tbl = st.session_state.get('out_tbl', pd.DataFrame())
+    
+    if base_pdf.empty:
+        st.info("👆 Configure parameters in sidebar and click 'RUN ANALYSIS' to load data")
+        st.stop()  # Don't render charts if no data
 
-    # Graph-level date filter (view-only)
-    try:
-        if base_pdf is not None and not base_pdf.empty:
-            bd = pd.to_datetime(base_pdf['the_date'])
-            min_d = bd.min().date()
-            max_d = bd.max().date()
-        else:
-            # Fallback to a sane default window
-            min_d = date(2025, 1, 1)
-            max_d = date(2025, 12, 31)
-    except Exception:
-        min_d = date(2025, 1, 1)
-        max_d = date(2025, 12, 31)
-
-    st.sidebar.subheader("🗓️ Graph Window")
-    view_start = st.sidebar.date_input("Start (view)", value=min_d, key='view_start')
-    view_end = st.sidebar.date_input("End (view)", value=max_d, key='view_end')
-    # Filter the series for plotting only
-    def _clip(df):
+    # View window filter (for display only, applied to already-loaded data)
+    def _clip(df, start, end):
         if df is None or df.empty:
             return df
         d2 = df.copy()
         if not pd.api.types.is_datetime64_any_dtype(d2['the_date']):
             d2['the_date'] = pd.to_datetime(d2['the_date'])
-        mask = (d2['the_date'] >= pd.Timestamp(view_start)) & (d2['the_date'] <= pd.Timestamp(view_end))
+        mask = (d2['the_date'] >= pd.Timestamp(start)) & (d2['the_date'] <= pd.Timestamp(end))
         return d2[mask]
 
-    base_view = _clip(base_pdf)
-    supp_view = _clip(supp_pdf)
+    base_view = _clip(base_pdf, display_start, display_end)
+    supp_view = _clip(supp_pdf, display_start, display_end)
+    out_view = _clip(out_tbl, display_start, display_end) if not out_tbl.empty else pd.DataFrame()
 
     # Toggle how suppressed series is shown on the chart
     st.sidebar.markdown("---")
@@ -897,103 +1063,55 @@ def main():
     replace_with_supp = st.sidebar.checkbox("Replace base with suppressed (no overlay)", value=False)
     scan_suppressed = st.sidebar.checkbox("Scan suppressed view for new outliers", value=False)
 
-    # Rebuild plot according to toggle
-    if analysis_mode == 'National':
-        if apply_supp and replace_with_supp:
-            fig = create_plot(supp_view, metric, analysis_mode, label="Suppressed")
-            # In replace mode, show suppressed as solid lines
-            for tr in fig.data:
-                tr.line['dash'] = None
-            # Overlay suppressed outliers as stars if enabled
-            if scan_suppressed:
-                try:
-                    out_sup = compute_ts_outliers(supp_pdf, window=14, z_thresh=2.5, positive_only=True)
-                    if not out_sup.empty:
-                        out_sup_view = out_sup[(out_sup['the_date'] >= pd.Timestamp(view_start)) & (out_sup['the_date'] <= pd.Timestamp(view_end))]
-                        for w in sorted(out_sup_view['winner'].unique()):
-                            ow = out_sup_view[out_sup_view['winner']==w]
-                            # y from suppressed view
-                            ys = supp_view[supp_view['winner']==w][['the_date','win_share']].rename(columns={'win_share':'y'})
-                            m = ow.merge(ys, on='the_date', how='left').dropna(subset=['y'])
-                            if not m.empty:
-                                fig.add_trace(go.Scatter(
-                                    x=m['the_date'], y=m['y'], mode='markers', name=f"{w} outlier (+/-)",
-                                    marker=dict(symbol='star', color='yellow', size=10, line=dict(color='black', width=0.6)),
-                                    showlegend=False,
-                                ))
-                except Exception:
-                    pass
-        else:
-            fig = create_plot(base_view, metric, analysis_mode, label="Base")
-            if apply_supp:
-                f2 = create_plot(supp_view, metric, analysis_mode, label="Suppressed")
-                # make suppressed dashed
-                for tr in f2.data:
-                    tr.line['dash'] = 'dash'
-                    fig.add_trace(tr)
-        fig.update_layout(width=1400, height=820, margin=dict(l=40, r=40, t=60, b=40))
-        st.plotly_chart(fig, use_container_width=False)
-    else:
-        if apply_supp and replace_with_supp:
-            fig = create_plot(supp_view, metric, 'Competitor', primary, label="Suppressed")
-            # In replace mode, show suppressed as solid lines
-            for tr in fig.data:
-                tr.line['dash'] = None
-            # Overlay suppressed outliers as stars if enabled
-            if scan_suppressed:
-                try:
-                    targets = [primary] + competitors if primary else []
-                    if targets:
-                        # Use in-memory detection on supp_pdf filtered to targets
-                        supp_targets = supp_pdf[supp_pdf['winner'].isin(targets)] if supp_pdf is not None else None
-                        out_sup = compute_ts_outliers(supp_targets, window=14, z_thresh=2.5, positive_only=True) if supp_targets is not None else pd.DataFrame()
-                        if not out_sup.empty:
-                            out_sup_view = out_sup[(out_sup['the_date'] >= pd.Timestamp(view_start)) & (out_sup['the_date'] <= pd.Timestamp(view_end))]
-                            for w in sorted(out_sup_view['winner'].unique()):
-                                ow = out_sup_view[out_sup_view['winner']==w]
-                                ys = supp_view[supp_view['winner']==w][['the_date','win_share']].rename(columns={'win_share':'y'})
-                                m = ow.merge(ys, on='the_date', how='left').dropna(subset=['y'])
-                                if not m.empty:
-                                    fig.add_trace(go.Scatter(
-                                        x=m['the_date'], y=m['y'], mode='markers', name=f"{w} outlier (+/-)",
-                                        marker=dict(symbol='star', color='yellow', size=10, line=dict(color='black', width=0.6)),
-                                        showlegend=False,
-                                    ))
-                except Exception:
-                    pass
-        else:
-            fig = create_plot(base_view, metric, 'Competitor', primary, label="Base")
-            if apply_supp:
-                f2 = create_plot(supp_view, metric, 'Competitor', primary, label="Suppressed")
-                for tr in f2.data:
-                    tr.line['dash'] = 'dash'
-                    fig.add_trace(tr)
-        fig.update_layout(width=1400, height=820, margin=dict(l=40, r=40, t=60, b=40))
-        st.plotly_chart(fig, use_container_width=False)
+    # Main chart section
+    st.header("📊 Time Series with Outliers")
+    st.caption(f"Displaying: {display_start} to {display_end} | Outliers computed from: {query_start}")
+    
+    # Rebuild plot with outliers overlaid
+    fig = create_plot(base_view, metric, analysis_mode, primary if analysis_mode=='Competitor' else None, label="Base")
+    
+    # Overlay outliers as yellow stars
+    if not out_view.empty:
+        for w in sorted(out_view['winner'].unique()):
+            ow = out_view[out_view['winner']==w]
+            # find y from base_view using the actual metric column
+            ys = base_view[base_view['winner']==w][['the_date', metric]].rename(columns={metric:'y'})
+            m = ow.merge(ys, on='the_date', how='left').dropna(subset=['y'])
+            if not m.empty:
+                fig.add_trace(go.Scatter(
+                    x=m['the_date'], y=m['y'], mode='markers', name=f"{w} outlier",
+                    marker=dict(symbol='star', color='yellow', size=12, line=dict(color='black', width=0.8)),
+                    showlegend=False,
+                ))
+    
+    # Optionally overlay suppressed series
+    if apply_supp:
+        f2 = create_plot(supp_view, metric, analysis_mode, primary if analysis_mode=='Competitor' else None, label="Suppressed")
+        for tr in f2.data:
+            tr.line['dash'] = 'dash'
+            fig.add_trace(tr)
+    
+    fig.update_layout(width=1400, height=820, margin=dict(l=40, r=40, t=60, b=40),
+                     title=f"{metric.replace('_', ' ').title()} - {analysis_mode} View")
+    st.plotly_chart(fig, use_container_width=False)
+    
+    # Summary stats
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Outlier Dates", len(out_view) if not out_view.empty else 0)
+    with col2:
+        carriers_with_outliers = len(out_view['winner'].unique()) if not out_view.empty else 0
+        st.metric("Carriers with Outliers", carriers_with_outliers)
+    with col3:
+        total_carriers = len(base_view['winner'].unique()) if not base_view.empty else 0
+        st.metric("Total Carriers", total_carriers)
 
-    # Before graph (Carrier-style) with star outliers, synced to view
-    try:
-        st.subheader("Before (Carrier-style with outliers)")
-        fig_before = create_plot(base_view, metric, analysis_mode, primary if analysis_mode=='Competitor' else None, label="Base")
-        out_tbl = compute_outliers_duckdb(ds_glob, filters, winners if analysis_mode=='National' else [primary] + competitors if primary else winners, window=14, z_thresh=2.5, start_date=global_min_date, end_date=global_max_date)
-        if out_tbl is not None and not out_tbl.empty:
-            out_view = out_tbl[(out_tbl['the_date'] >= pd.Timestamp(view_start)) & (out_tbl['the_date'] <= pd.Timestamp(view_end))].copy()
-            for w in sorted(out_view['winner'].unique()):
-                ow = out_view[out_view['winner']==w]
-                # find y from base_view
-                ys = base_view[base_view['winner']==w][['the_date','win_share']].rename(columns={'win_share':'y'})
-                m = ow.merge(ys, on='the_date', how='left').dropna(subset=['y'])
-                if not m.empty:
-                    fig_before.add_trace(go.Scatter(
-                        x=m['the_date'], y=m['y'], mode='markers', name=f"{w} outlier (+/-)",
-                        marker=dict(symbol='star', color='yellow', size=10, line=dict(color='black', width=0.6)),
-                        showlegend=False,
-                    ))
-        # Match main chart size and style
-        fig_before.update_layout(width=1400, height=820, margin=dict(l=40, r=40, t=60, b=40))
-        st.plotly_chart(fig_before, use_container_width=False)
-    except Exception:
-        pass
+    # Show outlier table
+    if not out_view.empty:
+        st.subheader("📋 Detected Outliers in Display Window")
+        st.dataframe(out_view.sort_values(['the_date', 'winner'], ascending=[False, True]))
+
+    # Continue with rest of dashboard sections (scan suppressed, summary, etc.)
 
     # Optional: scan suppressed view for new outliers in the view window
     if scan_suppressed and apply_supp and supp_view is not None and not supp_view.empty:
