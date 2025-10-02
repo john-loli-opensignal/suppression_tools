@@ -18,7 +18,11 @@ def _load_sql(name: str) -> str:
 
 
 def _render(tmpl: str, params: Dict[str, Any]) -> str:
-    return tmpl.format(**params)
+    # Minimal formatter; assumes params cover all placeholders
+    try:
+        return tmpl.format(**params)
+    except KeyError as e:
+        raise ValueError(f"Missing placeholder in SQL template: {e}") from e
 
 
 def _con() -> duckdb.DuckDBPyConnection:
