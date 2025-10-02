@@ -15,6 +15,15 @@ duckdb_partitioned_store/
 duckdb_partitioned_store_suppressed/
 current_run_duckdb/
 
+# DuckDB database files (typically large, regenerate from source)
+*.db
+*.duckdb
+duck_temp_*
+
+# Keep any example or test databases
+!*_example.db
+!*_test.db
+
 # Suppression outputs
 suppressions/*.csv
 suppressions/processed/
