@@ -500,12 +500,16 @@ def main():
     init_session_state()
 
     # Data source
-    default_dir = get_default_store_dir()
-    st.sidebar.header("📦 Data Source")
-    store_dir = st.sidebar.text_input("Partitioned dataset directory", value=default_dir)
+    st.title("📊 Carrier Performance Dashboard")
+
+    # Sidebar: Database path
+    st.sidebar.header("📦 Database")
+    db_path = st.sidebar.text_input("Database path", value=get_default_db_path())
+    
     # Verify database exists
     if not os.path.exists(db_path):
-        st.warning("No parquet files found in the dataset directory. Use the platform builder to create it.")
+        st.error(f"Database not found: {db_path}. Run: uv run build_suppression_db.py <preagg.parquet>")
+        st.stop()
 
     # Controls
     st.sidebar.header("📋 Dashboard Controls")
