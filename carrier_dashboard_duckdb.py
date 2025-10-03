@@ -261,6 +261,10 @@ def get_date_bounds(db_path: str, filters: dict):
 def get_distinct_options(db_path: str, column: str, table: str = 'carrier_data'):
     """Get distinct values for a column"""
     try:
+        # Special handling for boolean mover_ind column
+        if column == 'mover_ind':
+            return ["All", "True", "False"]
+        
         values = db.get_distinct_values(column, table, db_path=db_path)
         return ["All"] + [str(v) for v in values if v]
     except Exception as e:
