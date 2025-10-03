@@ -5,6 +5,9 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objs as go
 
+from suppression_tools import db
+from suppression_tools.src import metrics, outliers
+
 
 def get_default_db_path() -> str:
     """Get default database path"""
