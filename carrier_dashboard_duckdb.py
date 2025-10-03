@@ -633,6 +633,16 @@ def main():
     st.session_state.outlier_show = st.sidebar.radio("Show outliers", options=["All", "Positive only"], index=0 if st.session_state.outlier_show == 'All' else 1)
     st.sidebar.markdown("---")
     run_analysis = st.sidebar.button("🚀 RUN ANALYSIS", type="primary")
+    
+    # Validate required filters before running analysis
+    if run_analysis:
+        if st.session_state.filters.get('ds') == 'All' or not st.session_state.filters.get('ds'):
+            st.error("⚠️ Please select a specific dataset (ds). 'All' is not currently supported for cube queries.")
+            st.info("💡 To enable 'All' support, run: `uv run build_cubes_in_db.py --all --aggregate`")
+            run_analysis = False
+        elif st.session_state.filters.get('mover_ind') == 'All' or not st.session_state.filters.get('mover_ind'):
+            st.error("⚠️ Please select either 'True' or 'False' for mover_ind. 'All' is not currently supported.")
+            run_analysis = False
     if st.sidebar.button("Reset to defaults"):
         st.session_state.selected_carriers = []
         st.session_state.primary_carrier = None

@@ -165,7 +165,21 @@ def build_cube_table(
         traceback.print_exc()
         return False
     finally:
-        con.close()
+        pass
+    
+    # Build aggregate cubes if requested
+    if args.aggregate:
+        print("\n" + "=" * 70)
+        print("Building aggregate cubes")
+        print("=" * 70 + "\n")
+        for metric in ['win', 'loss']:
+            for mover_ind in [True, False]:
+                total_count += 1
+                if build_aggregate_cube(con, metric, mover_ind):
+                    success_count += 1
+                print()
+    
+    con.close()
 
 
 def build_all_cube_tables(
@@ -340,6 +354,45 @@ Examples:
     )
     
     return parser.parse_args(argv)
+
+
+def build_aggregate_cube(con, metric: str, mover_ind: bool) -> bool:
+    """Build aggregate cube across ALL datasets"""
+    mover_str = "mover" if mover_ind else "non_mover"
+    table_name = f"all_{metric}_{mover_str}_cube"
+    
+    print(f"[INFO] Building aggregate: {table_name}")
+    
+    metric_col = "adjusted_wins" if metric == "win" else "adjusted_losses"
+    total_col = "total_wins" if metric == "win" else "total_losses"
+    
+    try:
+        con.execute(f"DROP TABLE IF EXISTS {table_name}")
+        
+        con.execute(f"""
+        CREATE TABLE {table_name} AS
+        SELECT
+            ds, the_date,
+            EXTRACT(YEAR FROM the_date) as year,
+            EXTRACT(MONTH FROM the_date) as month,
+            EXTRACT(DAY FROM the_date) as day,
+            EXTRACT(DOW FROM the_date) as day_of_week,
+            winner, loser, dma, dma_name, state,
+            SUM({metric_col}) as {total_col},
+            COUNT(*) as record_count
+        FROM carrier_data
+        WHERE mover_ind = {str(mover_ind).upper()}
+        GROUP BY ds, the_date, year, month, day, day_of_week,
+                 winner, loser, dma, dma_name, state
+        """)
+        
+        count = con.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()[0]
+        print(f"[SUCCESS] Created {table_name} with {count:,} rows")
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Failed: {e}")
+        return False
 
 
 def main(argv=None):
