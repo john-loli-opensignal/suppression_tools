@@ -153,7 +153,8 @@ def build_cube_table(
         print(f"[SUCCESS] Table: {table_name}")
         print(f"  Stats:")
         print(f"    - Date range: {stats[0]} to {stats[1]}")
-        print(f"    - Total {metric}s: {stats[2]:,.0f}")
+        metric_label = "wins" if metric == "win" else "losses"
+        print(f"    - Total {metric_label}: {stats[2]:,.0f}")
         print(f"    - Unique winners: {stats[3]}")
         print(f"    - Unique losers: {stats[4]}")
         print(f"    - Unique DMAs: {stats[5]}")
