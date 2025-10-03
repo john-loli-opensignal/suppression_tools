@@ -312,6 +312,9 @@ Examples:
   # Skip existing tables (incremental build)
   uv run build_cubes_in_db.py --skip-existing
   
+  # Build all datasets + aggregate cubes
+  uv run build_cubes_in_db.py --all --aggregate
+  
   # List existing cube tables
   uv run build_cubes_in_db.py --list
         """
@@ -333,6 +336,12 @@ Examples:
         "--all",
         action="store_true",
         help="Build cube tables for all datasets in the database"
+    )
+    
+    parser.add_argument(
+        "--aggregate",
+        action="store_true",
+        help="Also build aggregate cubes across all datasets (all_* tables)"
     )
     
     parser.add_argument(
