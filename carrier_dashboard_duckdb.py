@@ -213,20 +213,45 @@ def where_clause(filters: dict) -> str:
 
 @st.cache_data
 def get_date_bounds(db_path: str, filters: dict):
-    """Get min/max dates from database"""
+    """Get min/max dates from database for the filtered data"""
     try:
-        stats = db.get_date_bounds(
-            start_date=None,
-            end_date=None,
-            ds=filters.get('ds'),
-            mover_ind=filters.get('mover_ind') == 'True' if 'mover_ind' in filters else None,
-            state=filters.get('state'),
-            dma_name=filters.get('dma_name'),
-            db_path=db_path
+        # Build WHERE clause from filters
+        where_parts = []
+        
+        if 'ds' in filters and filters['ds'] != 'All':
+            safe_ds = filters['ds'].replace("'", "''")
+            where_parts.append(f"ds = '{safe_ds}'")
+            
+        if 'mover_ind' in filters and filters['mover_ind'] != 'All':
+            mover_val = 'TRUE' if filters['mover_ind'] == 'True' else 'FALSE'
+            where_parts.append(f"mover_ind = {mover_val}")
+            
+        if 'state' in filters and filters['state'] != 'All':
+            safe_state = filters['state'].replace("'", "''")
+            where_parts.append(f"state = '{safe_state}'")
+            
+        if 'dma_name' in filters and filters['dma_name'] != 'All':
+            safe_dma = filters['dma_name'].replace("'", "''")
+            where_parts.append(f"dma_name = '{safe_dma}'")
+        
+        where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
+        
+        sql = f"""
+        SELECT 
+            MIN(the_date) as min_date,
+            MAX(the_date) as max_date
+        FROM carrier_data
+        {where_clause}
+        """
+        
+        result = db.query(sql, db_path)
+        if result.empty or pd.isna(result['min_date'].iloc[0]):
+            return (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
+        
+        return (
+            pd.to_datetime(result['min_date'].iloc[0]).date(),
+            pd.to_datetime(result['max_date'].iloc[0]).date()
         )
-        if stats:
-            return (stats['min_date'], stats['max_date'])
-        return (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
     except Exception as e:
         st.error(f"Error getting date bounds: {e}")
         return (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
