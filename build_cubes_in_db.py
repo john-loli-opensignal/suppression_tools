@@ -138,11 +138,12 @@ def build_cube_table(
         con.execute(f"ANALYZE {table_name}")
         
         # Show sample stats
+        metric_col = f"total_{metric}s" if metric == "win" else "total_losses"
         stats = con.execute(f"""
             SELECT
                 MIN(the_date) as min_date,
                 MAX(the_date) as max_date,
-                SUM(total_{metric}s) as total_metric_sum,
+                SUM({metric_col}) as total_metric_sum,
                 COUNT(DISTINCT winner) as unique_winners,
                 COUNT(DISTINCT loser) as unique_losers,
                 COUNT(DISTINCT dma_name) as unique_dmas
