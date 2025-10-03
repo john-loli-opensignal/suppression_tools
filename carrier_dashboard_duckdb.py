@@ -784,7 +784,6 @@ def main():
             st.dataframe(pivot, width='stretch')
 
     with st.expander("🔧 Debug"):
-        st.write(f"Data dir: {store_dir}")
         st.write(f"Database: {db_path}")
 
 
