@@ -1,5 +1,4 @@
 import os
-import glob
 import duckdb
 import pandas as pd
 import streamlit as st
@@ -7,18 +6,9 @@ import plotly.express as px
 import plotly.graph_objs as go
 
 
-def get_default_store_dir() -> str:
-    return os.path.join(os.getcwd(), "duckdb_partitioned_store")
-
-
-def get_store_glob(store_dir: str) -> str:
-    # Expand '~' so users can paste home-relative paths
-    store_dir = os.path.expanduser(store_dir) if isinstance(store_dir, str) else store_dir
-    if os.path.isdir(store_dir):
-        return os.path.join(store_dir, "**", "*.parquet")
-    if store_dir.endswith(".parquet"):
-        return store_dir
-    return os.path.join(store_dir, "*.parquet")
+def get_default_db_path() -> str:
+    """Get default database path"""
+    return os.path.join(os.getcwd(), "duck_suppression.db")
 
 
 def init_session_state():

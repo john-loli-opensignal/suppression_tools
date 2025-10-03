@@ -190,7 +190,7 @@ def competitor_view(
     loss_cube = f"{ds}_loss_{mover_str}_cube"
     
     # Build competitor list
-    comp_list = ",".join([f"'{str(c).replace(\"'\", \"''\")}'" for c in competitors])
+    comp_list = ','.join([f"'{str(c).replace("'", "''")}" for c in competitors])
     if not comp_list:
         return pd.DataFrame()
     

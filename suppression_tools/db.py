@@ -249,7 +249,8 @@ def get_date_bounds(db_path: Optional[str] = None, filters: Optional[dict] = Non
                 if isinstance(val, bool):
                     where_clauses.append(f"{col} = {val}")
                 elif isinstance(val, str):
-                    where_clauses.append(f"{col} = '{val.replace(\"'\", \"''\"")}'")
+                    sval = str(val).replace("'", "''")
+                    where_clauses.append(f"{col} = '{sval}'")
                 else:
                     where_clauses.append(f"{col} = {val}")
     
