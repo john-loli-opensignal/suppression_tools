@@ -294,9 +294,13 @@ def get_national_timeseries(
     if end_date:
         filters.append(f"the_date <= DATE '{end_date}'")
     if state:
-        filters.append(f"state = '{state.replace(\"'\", \"''\"")}'")
-    if dma_name:
-        filters.append(f"dma_name = '{dma_name.replace(\"'\", \"''\"")}'")
+        safe_state = state.replace("'", "''")
+        filters.append(f"state = '{safe_state}'")
+        filters.append(f"state = '{safe_state}'")
+        safe_dma = dma_name.replace("'", "''")
+        filters.append(f"dma_name = '{safe_dma}'")
+        safe_dma = dma_name.replace("'", "''")
+        filters.append(f"dma_name = '{safe_dma}'")
     
     where_clause = "WHERE " + " AND ".join(filters)
     
