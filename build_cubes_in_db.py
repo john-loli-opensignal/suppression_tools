@@ -171,17 +171,9 @@ def build_cube_table(
     
     # Build aggregate cubes if requested
     if args.aggregate:
-        print("\n" + "=" * 70)
-        print("Building aggregate cubes")
-        print("=" * 70 + "\n")
-        for metric in ['win', 'loss']:
-            for mover_ind in [True, False]:
-                total_count += 1
-                if build_aggregate_cube(con, metric, mover_ind):
-                    success_count += 1
-                print()
+        total_count += 4  # We'll build 4 aggregate cubes
     
-    con.close()
+    # Build dataset-specific cubes
 
 
 def build_all_cube_tables(
@@ -448,10 +440,63 @@ def main(argv=None):
                 all_success = False
                 print(f"[WARNING] Some cube tables failed for dataset: {ds}\n")
         
+        # Build aggregate cubes if requested
+        if args.aggregate:
+            print("\n" + "=" * 70)
+            print("Building aggregate cubes across all datasets")
+            print("=" * 70 + "\n")
+            
+            import duckdb
+            con = duckdb.connect(args.db)
+            
+            agg_success = 0
+            agg_total = 0
+            for metric in ['win', 'loss']:
+                for mover_ind in [True, False]:
+                    agg_total += 1
+                    if build_aggregate_cube(con, metric, mover_ind):
+                        agg_success += 1
+                    print()
+            
+            con.close()
+            
+            print("=" * 70)
+            print(f"Aggregate cubes: {agg_success}/{agg_total} built successfully")
+            print("=" * 70)
+            
+            all_success = all_success and (agg_success == agg_total)
+        
         return 0 if all_success else 1
     else:
         # Build cube tables for single dataset
         success = build_all_cube_tables(args.db, args.ds, args.skip_existing)
+        
+        # Build aggregate cubes if requested
+        if args.aggregate:
+            print("\n" + "=" * 70)
+            print("Building aggregate cubes across all datasets")
+            print("=" * 70 + "\n")
+            
+            import duckdb
+            con = duckdb.connect(args.db)
+            
+            agg_success = 0
+            agg_total = 0
+            for metric in ['win', 'loss']:
+                for mover_ind in [True, False]:
+                    agg_total += 1
+                    if build_aggregate_cube(con, metric, mover_ind):
+                        agg_success += 1
+                    print()
+            
+            con.close()
+            
+            print("=" * 70)
+            print(f"Aggregate cubes: {agg_success}/{agg_total} built successfully")
+            print("=" * 70)
+            
+            success = success and (agg_success == agg_total)
+        
         return 0 if success else 1
 
 
