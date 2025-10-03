@@ -1,0 +1,4 @@
+census_blockid,state,dma_name,winner,loser,date_count,avg_value,stddev_value,max_value,min_value,range_value,coefficient_of_variation
+481130178172010,,,AT&T,Spectrum,5,0.2,0.4472135954999579,1.0,0.0,1.0,5.0
+060730207064009,,,AT&T,Cox Communications,5,0.2,0.4472135954999579,1.0,0.0,1.0,5.0
+060190026022012,California,"Fresno-Visalia, CA",AT&T,Comcast,5,0.4,0.8944271909999159,2.0,0.0,2.0,5.0

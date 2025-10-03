@@ -1,0 +1,7 @@
+census_blockid,state,dma_name,winner,loser,date_count,avg_value,stddev_value,max_value,min_value,range_value,coefficient_of_variation
+250010108005003,Massachusetts,"Boston, MA-NH-VT",Comcast,Spectrum,5,0.2,0.4472135954999579,1.0,0.0,1.0,5.0
+482150241081000,Texas,"Harlingen-Weslaco-Brownsville-McAllen, TX",Spectrum,AT&T,5,0.4,0.8944271909999159,2.0,0.0,2.0,5.0
+482014230011001,,,AT&T,Comcast,5,0.2,0.4472135954999579,1.0,0.0,1.0,5.0
+210472015022000,Kentucky,"Nashville, TN-KY",AT&T,Spectrum,5,0.2,0.4472135954999579,1.0,0.0,1.0,5.0
+060855003001049,California,"San Francisco-Oakland-San Jose, CA",T-Mobile FWA,Cox Communications,5,0.2,0.4472135954999579,1.0,0.0,1.0,5.0
+121050131031038,Florida,"Tampa-St. Petersburg, FL",Spectrum,Frontier,5,0.2,0.4472135954999579,1.0,0.0,1.0,5.0
