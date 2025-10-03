@@ -50,7 +50,12 @@ def build_cube_table(
     print(f"[INFO] Building {metric} cube table: {table_name}")
     
     # Select the appropriate metric column
-    metric_col = "adjusted_wins" if metric == "win" else "adjusted_losses"
+    if metric == "win":
+        metric_col = "adjusted_wins"
+        total_col = "total_wins"
+    else:
+        metric_col = "adjusted_losses"
+        total_col = "total_losses"  # Fixed typo!
     
     con = duckdb.connect(db_path, read_only=False)
     try:
@@ -71,7 +76,7 @@ def build_cube_table(
             dma,
             dma_name,
             state,
-            SUM({metric_col}) as total_{metric}s,
+            SUM({metric_col}) as {total_col},
             COUNT(*) as record_count
         FROM carrier_data
         WHERE ds = '{ds.replace("'", "''")}'
