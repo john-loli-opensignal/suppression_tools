@@ -36,7 +36,8 @@ Each cube is pre-aggregated on **all indexed columns**:
 
 ## Building Cubes
 
-### Build Cube Tables in Database (Recommended)
+### Build Cube Tables in Database
+
 ```bash
 # Build for default dataset (gamoshi)
 uv run build_cubes_in_db.py
@@ -51,11 +52,7 @@ uv run build_cubes_in_db.py --list
 uv run build_cubes_in_db.py --skip-existing
 ```
 
-### Alternative: Build as Parquet Files (Legacy)
-```bash
-# If you need portable cube files
-uv run build_cubes_from_db.py
-```
+**Note**: Cubes are now stored as tables inside the database, not as separate parquet files.
 
 ## Performance
 
@@ -74,7 +71,8 @@ For typical dataset (30-60 days, ~50 carriers, ~200 DMAs):
 
 - **Database (raw data)**: ~600-800 MB
 - **Database with 4 cube tables**: ~650-900 MB (**~50-100MB overhead**)
-- **Alternative: 4 separate parquet files**: ~50-120 MB (but requires managing separate files)
+
+**All data in one file** - no separate parquet management needed!
 
 ## Querying Cubes
 
