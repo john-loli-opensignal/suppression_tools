@@ -190,7 +190,9 @@ def competitor_view(
     loss_cube = f"{ds}_loss_{mover_str}_cube"
     
     # Build competitor list
-    comp_list = ','.join([f"'{str(c).replace("'", "''")}" for c in competitors])
+    # Build competitor list - escape single quotes properly
+    escaped_comps = [str(c).replace("'", "''") for c in competitors]
+    comp_list = ','.join([f"'{c}'" for c in escaped_comps])
     if not comp_list:
         return pd.DataFrame()
     
