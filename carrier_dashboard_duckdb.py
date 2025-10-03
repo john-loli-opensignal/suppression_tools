@@ -209,72 +209,223 @@ def where_clause(filters: dict) -> str:
 
 
 @st.cache_data
-def get_date_bounds(ds_glob: str, filters: dict):
-    con = duckdb.connect()
+def get_date_bounds(db_path: str, filters: dict):
+    """Get min/max dates from database"""
     try:
-        where = where_clause(filters)
-        q = f"SELECT MIN(CAST(the_date AS DATE)) AS mn, MAX(CAST(the_date AS DATE)) AS mx FROM parquet_scan('{ds_glob}') {where}"
-        df = con.execute(q).df()
-        if df.empty or pd.isna(df['mn'][0]) or pd.isna(df['mx'][0]):
-            return (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
-        return (pd.to_datetime(df['mn'][0]).date(), pd.to_datetime(df['mx'][0]).date())
-    finally:
-        con.close()
-
-
-@st.cache_data
-def get_distinct_options(ds_glob: str, column: str):
-    con = duckdb.connect()
-    try:
-        q = f"SELECT DISTINCT {column} FROM parquet_scan('{ds_glob}') WHERE {column} IS NOT NULL ORDER BY 1"
-        df = con.execute(q).df()
-        values = df.iloc[:, 0].tolist()
-        values = [str(v) for v in values]
-        return ["All"] + values
-    finally:
-        con.close()
-
-
-@st.cache_data
-def get_ranked_winners(ds_glob: str, filters: dict):
-    con = duckdb.connect()
-    try:
-        where = where_clause(filters)
-        q = f"""
-        WITH ds AS (
-            SELECT * FROM parquet_scan('{ds_glob}')
+        stats = db.get_date_bounds(
+            start_date=None,
+            end_date=None,
+            ds=filters.get('ds'),
+            mover_ind=filters.get('mover_ind') == 'True' if 'mover_ind' in filters else None,
+            state=filters.get('state'),
+            dma_name=filters.get('dma_name'),
+            db_path=db_path
         )
-        SELECT winner, SUM(adjusted_wins) AS total_wins
-        FROM ds
-        {where}
-        GROUP BY 1
-        ORDER BY 2 DESC
-        """
-        df = con.execute(q).df()
-        return df['winner'].dropna().tolist()
-    finally:
-        con.close()
+        if stats:
+            return (stats['min_date'], stats['max_date'])
+        return (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
+    except Exception as e:
+        st.error(f"Error getting date bounds: {e}")
+        return (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
 
 
 @st.cache_data
-def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, show_other: bool, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
-    # Defensive local imports to avoid Streamlit cache scope issues
-    from suppression_tools.src import metrics as _metrics
-    from suppression_tools.src import outliers as _outliers
+def get_distinct_options(db_path: str, column: str, table: str = 'carrier_data'):
+    """Get distinct values for a column"""
+    try:
+        values = db.get_distinct_values(column, table, db_path=db_path)
+        return ["All"] + [str(v) for v in values if v]
+    except Exception as e:
+        st.error(f"Error getting options for {column}: {e}")
+        return ["All"]
+
+
+@st.cache_data
+def get_ranked_winners(db_path: str, filters: dict):
+    """Get carriers ranked by total wins"""
+    try:
+        # Build filter dict for query
+        filter_params = {}
+        if 'ds' in filters and filters['ds'] != 'All':
+            filter_params['ds'] = filters['ds']
+        if 'mover_ind' in filters and filters['mover_ind'] != 'All':
+            filter_params['mover_ind'] = (filters['mover_ind'] == 'True')
+        if 'state' in filters and filters['state'] != 'All':
+            filter_params['state'] = filters['state']
+        if 'dma_name' in filters and filters['dma_name'] != 'All':
+            filter_params['dma_name'] = filters['dma_name']
+        
+        # Query database
+        where_parts = []
+        for key, val in filter_params.items():
+            if isinstance(val, bool):
+                where_parts.append(f"{key} = {val}")
+            elif val:
+                safe_val = str(val).replace("'", "''")
+                where_parts.append(f"{key} = '{safe_val}'")
+        
+        where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
+        
+        sql = f"""
+        SELECT winner, SUM(adjusted_wins) AS total_wins
+        FROM carrier_data
+        {where_clause}
+        GROUP BY winner
+        ORDER BY total_wins DESC
+        """
+        
+        df = db.query(sql, db_path)
+        return df['winner'].dropna().tolist()
+    except Exception as e:
+        st.error(f"Error getting ranked winners: {e}")
+        return []
+
+
+@st.cache_data
+def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, show_other: bool, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
+    """Compute national PDF with outliers using database"""
     if not selected_winners:
         return pd.DataFrame(columns=["the_date", "winner", metric])
+    
     _ds = filters.get('ds', 'gamoshi')
-    _mover_ind = filters.get('mover_ind', 'False')
+    _mover_ind = (filters.get('mover_ind', 'False') == 'True')
     _state = filters.get('state') if filters else None
     _dma = filters.get('dma_name') if filters else None
+    
+    # Get base metrics from database/cubes
+    base = metrics.national_timeseries(
+        ds=_ds,
+        mover_ind=_mover_ind,
+        start_date=start_date,
+        end_date=end_date,
+        state=_state,
+        dma_name=_dma,
+        db_path=db_path
+    )
+    
+    if base.empty:
+        return pd.DataFrame(columns=["the_date", "winner", metric])
+    
+    # Get outliers
+    outs = outliers.national_outliers(
+        ds=_ds,
+        mover_ind=_mover_ind,
+        start_date=start_date,
+        end_date=end_date,
+        window=window,
+        z_thresh=z_thresh,
+        state=_state,
+        dma_name=_dma,
+        metric=metric,
+        db_path=db_path
+    )
+    
+    # Merge base and outliers
+    if not outs.empty:
+        pdf = base.merge(outs[['the_date', 'winner', 'z', 'nat_outlier_pos']],
+                        on=['the_date', 'winner'], how='left')
+        pdf['is_outlier'] = pdf['nat_outlier_pos'].fillna(False)
+        pdf['zscore'] = pdf['z'].fillna(0)
+    else:
+        pdf = base.copy()
+        pdf['is_outlier'] = False
+        pdf['zscore'] = 0
+    
+    # Filter to selected winners
+    pdf = pdf[pdf['winner'].isin(selected_winners)].copy()
+    
+    # Add "Other" aggregation if needed
+    if show_other and not pdf.empty:
+        all_winners = base['winner'].unique()
+        other_winners = [w for w in all_winners if w not in selected_winners]
+        if other_winners:
+            other_data = base[base['winner'].isin(other_winners)].copy()
+            if not other_data.empty:
+                other_agg = other_data.groupby('the_date')[metric].sum().reset_index()
+                other_agg['winner'] = 'Other'
+                other_agg['is_outlier'] = False
+                other_agg['zscore'] = 0
+                pdf = pd.concat([pdf, other_agg], ignore_index=True)
+    
+    return pdf
 
-    base = _metrics.national_timeseries(ds_glob, _ds, _mover_ind, start_date, end_date, state=_state, dma_name=_dma)
+
+@st.cache_data
+def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
+    """Compute competitor PDF with outliers using database"""
+    if not competitors:
+        return pd.DataFrame(columns=["the_date", "competitor", metric])
+    
+    _ds = filters.get('ds', 'gamoshi')
+    _mover_ind = (filters.get('mover_ind', 'False') == 'True')
+    _state = filters.get('state') if filters else None
+    _dma = filters.get('dma_name') if filters else None
+    
+    # Get competitor view from database/cubes
+    base = metrics.competitor_view(
+        ds=_ds,
+        mover_ind=_mover_ind,
+        start_date=start_date,
+        end_date=end_date,
+        primary=primary,
+        competitors=competitors,
+        state=_state,
+        dma_name=_dma,
+        db_path=db_path
+    )
+    
+    if base.empty:
+        return pd.DataFrame(columns=["the_date", "competitor", metric])
+    
+    # Calculate metric
+    if metric == 'win_share':
+        base['win_share'] = base['h2h_wins'] / base['primary_total_wins'].replace(0, pd.NA)
+    elif metric == 'loss_share':
+        base['loss_share'] = base['h2h_losses'] / base['primary_total_losses'].replace(0, pd.NA)
+    elif metric == 'wins_per_loss':
+        base['wins_per_loss'] = base['h2h_wins'] / base['h2h_losses'].replace(0, pd.NA)
+    
+    # Compute outliers inline (day-type grouped z-score)
+    def _z_for_group(g):
+        g = g.sort_values('the_date')
+        g['day_type'] = g['the_date'].apply(lambda d: 'Sat' if pd.Timestamp(d).weekday() == 5
+                                            else 'Sun' if pd.Timestamp(d).weekday() == 6
+                                            else 'Weekday')
+        g['zscore'] = 0.0
+        g['is_outlier'] = False
+        
+        for dt in g['day_type'].unique():
+            mask = g['day_type'] == dt
+            vals = g.loc[mask, metric]
+            if len(vals) > 1:
+                mu = vals.shift(1).rolling(window, min_periods=1).mean()
+                sigma = vals.shift(1).rolling(window, min_periods=1).std()
+                z = (vals - mu) / sigma.replace(0, pd.NA)
+                g.loc[mask, 'zscore'] = z.fillna(0)
+                g.loc[mask, 'is_outlier'] = (z.abs() > z_thresh)
+        
+        return g
+    
+    if 'competitor' in base.columns:
+        pdf = base.groupby('competitor', group_keys=False).apply(_z_for_group).reset_index(drop=True)
+    else:
+        pdf = base.copy()
+        pdf['zscore'] = 0
+        pdf['is_outlier'] = False
+    
+    # Rename competitor to winner for consistency
+    if 'competitor' in pdf.columns:
+        pdf['winner'] = pdf['competitor']
+    
+    return pdf
+
+    base = _metrics.national_timeseries(db_path, _ds, _mover_ind, start_date, end_date, state=_state, dma_name=_dma)
     if base.empty:
         return pd.DataFrame(columns=["the_date", "winner", metric])
     keep = base[['the_date', 'winner', metric]].copy()
     keep = keep[keep['winner'].isin(selected_winners)]
 
-    outs = _outliers.national_outliers(ds_glob, _ds, _mover_ind, start_date, end_date, window, z_thresh, state=_state, dma_name=_dma, metric=metric)
+    outs = _outliers.national_outliers(db_path, _ds, _mover_ind, start_date, end_date, window, z_thresh, state=_state, dma_name=_dma, metric=metric)
     if not outs.empty:
         keep = keep.merge(
             outs[['the_date', 'winner', 'z', 'nat_outlier_pos']].rename(columns={'z': 'zscore', 'nat_outlier_pos': 'is_outlier'}),
@@ -300,7 +451,7 @@ def compute_national_pdf(ds_glob: str, filters: dict, selected_winners: list, sh
 
 
 @st.cache_data
-def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
+def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
     # Defensive local import to avoid Streamlit cache scope issues
     from suppression_tools.src import metrics as _metrics
     if not primary or not competitors:
@@ -311,7 +462,7 @@ def compute_competitor_pdf(ds_glob: str, filters: dict, primary: str, competitor
     _state = filters.get('state') if filters else None
     _dma = filters.get('dma_name') if filters else None
 
-    base = _metrics.competitor_view(ds_glob, _ds, _mover_ind, start_date, end_date, primary, competitors, state=_state, dma_name=_dma)
+    base = _metrics.competitor_view(db_path, _ds, _mover_ind, start_date, end_date, primary, competitors, state=_state, dma_name=_dma)
     if base.empty:
         return pd.DataFrame(columns=["the_date", "winner", metric])
 
@@ -352,8 +503,8 @@ def main():
     default_dir = get_default_store_dir()
     st.sidebar.header("📦 Data Source")
     store_dir = st.sidebar.text_input("Partitioned dataset directory", value=default_dir)
-    ds_glob = get_store_glob(store_dir)
-    if not glob.glob(ds_glob, recursive=True):
+    # Verify database exists
+    if not os.path.exists(db_path):
         st.warning("No parquet files found in the dataset directory. Use the platform builder to create it.")
 
     # Controls
@@ -372,7 +523,7 @@ def main():
         # Custom multi-select with search for carriers (preloaded from ranked list)
         if st.session_state.selection_mode == "Custom Selection":
             try:
-                carrier_options = get_ranked_winners(ds_glob, st.session_state.filters)
+                carrier_options = get_ranked_winners(db_path, st.session_state.filters)
             except Exception:
                 carrier_options = []
             prev = st.session_state.selected_carriers if isinstance(st.session_state.selected_carriers, list) else []
@@ -395,7 +546,7 @@ def main():
         # Primary / Competitors selection using ranked winners (filtered) for consistency with v2
         ranked_options = []
         try:
-            ranked_options = get_ranked_winners(ds_glob, st.session_state.filters)
+            ranked_options = get_ranked_winners(db_path, st.session_state.filters)
         except Exception:
             ranked_options = []
         primary_index = ranked_options.index(st.session_state.primary_carrier) if st.session_state.primary_carrier in ranked_options else 0
@@ -415,7 +566,7 @@ def main():
     filter_columns = ['mover_ind', 'ds', 'state', 'dma_name']
     for col in filter_columns:
         try:
-            options = get_distinct_options(ds_glob, col)
+            options = get_distinct_options(db_path, col)
         except Exception:
             options = ["All"]
         current_value = st.session_state.filters.get(col, "All")
@@ -426,7 +577,7 @@ def main():
     # Graph Window (date range)
     st.sidebar.subheader("🗓️ Graph Window")
     try:
-        dmin, dmax = get_date_bounds(ds_glob, st.session_state.filters)
+        dmin, dmax = get_date_bounds(db_path, st.session_state.filters)
     except Exception:
         dmin, dmax = (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
     if 'graph_start' not in st.session_state or not st.session_state.get('graph_start'):
@@ -459,7 +610,7 @@ def main():
     # Prepare data on RUN
     if run_analysis:
         # compute ranked list under filters
-        ranked_filtered = get_ranked_winners(ds_glob, st.session_state.filters)
+        ranked_filtered = get_ranked_winners(db_path, st.session_state.filters)
         # Defaults by filtered scope
         if st.session_state.analysis_mode == "National" and st.session_state.selection_mode == "Top N Carriers":
             st.session_state.top_n = min(10, len(ranked_filtered)) if ranked_filtered else 10
@@ -472,7 +623,7 @@ def main():
         # compute data now and store snapshot
         if st.session_state.analysis_mode == "Competitor":
             pdf = compute_competitor_pdf(
-                ds_glob,
+                db_path,
                 st.session_state.filters,
                 st.session_state.primary_carrier,
                 st.session_state.competitor_carrier if isinstance(st.session_state.competitor_carrier, list) else [],
@@ -484,12 +635,12 @@ def main():
             )
         else:
             if st.session_state.selection_mode == "Top N Carriers":
-                ranked_filtered = get_ranked_winners(ds_glob, st.session_state.filters)
+                ranked_filtered = get_ranked_winners(db_path, st.session_state.filters)
                 selected_winners = ranked_filtered[: st.session_state.top_n]
             else:
                 selected_winners = st.session_state.selected_carriers
             pdf = compute_national_pdf(
-                ds_glob,
+                db_path,
                 st.session_state.filters,
                 selected_winners,
                 show_other=st.session_state.show_other,
@@ -531,7 +682,7 @@ def main():
     if st.session_state.analysis_mode == "National":
         st.sidebar.write(f"**Total Selected:** {st.session_state.top_n if st.session_state.selection_mode == 'Top N Carriers' else len(st.session_state.selected_carriers)} carriers")
         try:
-            total_in_filtered = len(get_ranked_winners(ds_glob, st.session_state.filters))
+            total_in_filtered = len(get_ranked_winners(db_path, st.session_state.filters))
         except Exception:
             total_in_filtered = 0
         others = max(0, total_in_filtered - (st.session_state.top_n if st.session_state.selection_mode == 'Top N Carriers' else len(st.session_state.selected_carriers)))
@@ -590,7 +741,7 @@ def main():
         st.subheader("📈 Summary")
         if st.session_state.analysis_mode == "National":
             if st.session_state.selection_mode == "Top N Carriers":
-                ranked_filtered = get_ranked_winners(ds_glob, st.session_state.filters)
+                ranked_filtered = get_ranked_winners(db_path, st.session_state.filters)
                 st.metric("Top N", min(st.session_state.top_n, len(ranked_filtered)))
             else:
                 st.metric("Selected Carriers", len(st.session_state.selected_carriers))
@@ -616,7 +767,7 @@ def main():
     # Optional: Top N preview in sidebar like v2
     if st.session_state.analysis_mode == "National" and st.session_state.selection_mode == "Top N Carriers":
         try:
-            ranked_opts = get_ranked_winners(ds_glob, st.session_state.filters)
+            ranked_opts = get_ranked_winners(db_path, st.session_state.filters)
         except Exception:
             ranked_opts = []
         if ranked_opts:
@@ -634,7 +785,7 @@ def main():
 
     with st.expander("🔧 Debug"):
         st.write(f"Data dir: {store_dir}")
-        st.write(f"Glob: {ds_glob}")
+        st.write(f"Database: {db_path}")
 
 
 if __name__ == "__main__":
