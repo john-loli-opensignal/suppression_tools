@@ -1,0 +1,45 @@
+{
+  "total_statistical_outliers": 18196,
+  "total_first_appearances": 100108,
+  "total_volume_spikes": 8912,
+  "total_geographic_concentrations": 5084,
+  "total_impossible_metrics": 0,
+  "grand_total": 132300,
+  "by_date": {
+    "2025-06-19": {
+      "statistical_outliers": 0,
+      "first_appearances": 0,
+      "volume_spikes": 0,
+      "geographic_concentrations": 0,
+      "impossible_metrics": 0
+    },
+    "2025-08-15": {
+      "statistical_outliers": 0,
+      "first_appearances": 0,
+      "volume_spikes": 0,
+      "geographic_concentrations": 0,
+      "impossible_metrics": 0
+    },
+    "2025-08-16": {
+      "statistical_outliers": 0,
+      "first_appearances": 0,
+      "volume_spikes": 0,
+      "geographic_concentrations": 0,
+      "impossible_metrics": 0
+    },
+    "2025-08-17": {
+      "statistical_outliers": 0,
+      "first_appearances": 0,
+      "volume_spikes": 0,
+      "geographic_concentrations": 0,
+      "impossible_metrics": 0
+    },
+    "2025-08-18": {
+      "statistical_outliers": 0,
+      "first_appearances": 0,
+      "volume_spikes": 0,
+      "geographic_concentrations": 0,
+      "impossible_metrics": 0
+    }
+  }
+}
