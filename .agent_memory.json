@@ -1,0 +1,104 @@
+{
+  "project_structure": {
+    "database": {
+      "path": "/home/jloli/codebase-comparison/suppression_tools/data/databases/duck_suppression.db",
+      "note": "ALWAYS use this path. No other .db files should exist.",
+      "assert_check": "db_path must be 'data/databases/duck_suppression.db'"
+    },
+    "key_directories": {
+      "tools": "suppression_tools/src/ - Main library code",
+      "data": "data/ - Database and outputs",
+      "docs": "docs/ - Markdown reports and analysis",
+      "scripts": "Root level - Executable scripts"
+    }
+  },
+  "database_schema": {
+    "raw_tables": {
+      "gamoshi_preagg": "Partitioned raw data loaded from parquet",
+      "note": "Format: {ds}_preagg with partitions by the_date"
+    },
+    "cube_tables": {
+      "pattern": "{ds}_{win|loss}_{mover|non_mover}_cube",
+      "gamoshi_win_mover_cube": "Aggregated at date, state, dma_name, winner, loser level",
+      "gamoshi_win_non_mover_cube": "Aggregated at date, state, dma_name, winner, loser level",
+      "gamoshi_loss_mover_cube": "Aggregated at date, state, dma_name, winner, loser level",
+      "gamoshi_loss_non_mover_cube": "Aggregated at date, state, dma_name, winner, loser level",
+      "note": "These are indexed on date, state, dma, winner, loser for fast queries"
+    },
+    "rolling_views": {
+      "gamoshi_win_mover_rolling": "DOW-aware rolling metrics (28d, 14d windows)",
+      "gamoshi_win_non_mover_rolling": "DOW-aware rolling metrics (28d, 14d windows)",
+      "columns": [
+        "the_date", "state", "dma_name", "winner", "loser",
+        "total_wins", "avg_wins_28d", "stddev_wins_28d", "z_score_28d",
+        "avg_wins_14d", "stddev_wins_14d", "z_score_14d",
+        "pct_change_28d", "pct_change_14d",
+        "days_since_last_seen", "is_first_appearance",
+        "day_of_week", "dow_name"
+      ],
+      "note": "DuckDB uses 0=Monday, 6=Sunday. Views map: 1=Sunday, 7=Saturday"
+    }
+  },
+  "outlier_detection": {
+    "hierarchical_levels": [
+      "national (ds, mover_ind) - Top level shares",
+      "h2h_national (ds, mover_ind, winner, loser) - Pair analysis",
+      "state (state, ds, mover_ind) - Geographic patterns",
+      "state_h2h (state, ds, mover_ind, winner, loser) - State pair analysis",
+      "dma (dma_name, ds, mover_ind, winner, loser) - Lowest actionable level"
+    ],
+    "methods": {
+      "z_score_outlier": {
+        "threshold": "1.5 (parameterized, can go to 2.0)",
+        "metric": "z_score_28d > 1.5 OR z_score_14d > 1.5"
+      },
+      "percentage_spike": {
+        "threshold": "30% increase",
+        "metric": "pct_change_28d > 0.30 OR pct_change_14d > 0.30"
+      },
+      "first_appearance": {
+        "level": "DMA level (not census block - too noisy)",
+        "metric": "is_first_appearance = TRUE AND total_wins >= 10"
+      },
+      "minimum_threshold": {
+        "value": "10 wins on current date",
+        "reason": "Avoid noise from low-volume data"
+      }
+    },
+    "rolling_windows": {
+      "primary": "28 days (4 weeks same DOW)",
+      "secondary": "14 days (2 weeks same DOW)",
+      "dow_aware": "CRITICAL - weekends have higher volume than weekdays",
+      "minimum_history": "4 preceding same-DOW dates"
+    }
+  },
+  "suppression_workflow": {
+    "detection": "Top-down: National → H2H → State → State H2H → DMA",
+    "action": "Remove IMPACT (current - avg) from outlier DMA pairs",
+    "distribution": "Distribute suppressed wins to non-outlier pairs proportionally",
+    "visualization": "Solid line = original, dashed line = suppressed (BELOW solid)",
+    "old_approach": "Used CSV cubes with same logic - worked well"
+  },
+  "key_learnings": {
+    "database_paths": "ONLY use data/duck_suppression.db - add assertion checks",
+    "dow_mapping": "DuckDB dayofweek(date) returns 0-6 where 0=Monday, 6=Sunday",
+    "first_appearance_noise": "Census block level too noisy (new blocks every day)",
+    "weekend_volume": "Saturday/Sunday have significantly higher volume than weekdays",
+    "minimum_thresholds": "Essential to avoid flagging noise as outliers",
+    "commit_style": "feat(scope): description - one logical change per commit"
+  },
+  "active_datasets": {
+    "gamoshi": {
+      "date_range": "2025-02-19 to 2025-09-04",
+      "focus_dates": ["2025-06-19", "2025-08-15", "2025-08-16", "2025-08-17", "2025-08-18"],
+      "carriers": ["AT&T", "T-Mobile", "Verizon", "Dish", "UScellular", "etc"],
+      "status": "Primary dataset for POC and testing"
+    }
+  },
+  "commands": {
+    "build_cubes": "uv run build_cubes_in_db.py --all",
+    "create_views": "Direct SQL via db.py query() method",
+    "run_dashboard": "uv run streamlit run carrier_dashboard_duckdb.py",
+    "query_db": "Use suppression_tools.db.query(sql, db_path) helper"
+  }
+}

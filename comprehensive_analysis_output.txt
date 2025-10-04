@@ -1,0 +1,262 @@
+Connecting to database: /home/jloli/codebase-comparison/suppression_tools/data/databases/duck_suppression.db
+Analysis period: 2025-06-01 through end of data
+
+Available tables:
+                            table_name
+0       gamoshi_loss_mover_census_cube
+1              gamoshi_loss_mover_cube
+2   gamoshi_loss_non_mover_census_cube
+3          gamoshi_loss_non_mover_cube
+4           gamoshi_win_mover_baseline
+5        gamoshi_win_mover_census_cube
+6               gamoshi_win_mover_cube
+7            gamoshi_win_mover_rolling
+8    gamoshi_win_non_mover_census_cube
+9           gamoshi_win_non_mover_cube
+10       gamoshi_win_non_mover_rolling
+
+================================================================================
+SUMMARY STATISTICS
+================================================================================
+
+Outliers by Date:
+     the_date  num_outliers  total_outlier_wins  total_baseline_wins  total_impact        dow
+0  2025-06-01           162              3577.0          2648.000000    929.000000     Sunday
+1  2025-06-02           104              2042.0          1409.750000    632.250000     Monday
+2  2025-06-03            96              1871.0          1318.500000    552.500000    Tuesday
+3  2025-06-04           105              1969.0          1385.250000    583.750000  Wednesday
+4  2025-06-05            72              1301.0           912.250000    388.750000   Thursday
+5  2025-06-06            72              1389.0           923.000000    466.000000     Friday
+6  2025-06-07           139              2919.0          2142.250000    776.750000   Saturday
+7  2025-06-08           100              2008.0          1441.500000    566.500000     Sunday
+8  2025-06-09            52               955.0           578.000000    377.000000     Monday
+9  2025-06-10            54               860.0           581.000000    279.000000    Tuesday
+10 2025-06-11            56               879.0           601.500000    277.500000  Wednesday
+11 2025-06-12            54               943.0           652.500000    290.500000   Thursday
+12 2025-06-13            65              1068.0           733.083333    334.916667     Friday
+13 2025-06-14           131              2310.0          1611.750000    698.250000   Saturday
+14 2025-06-15            98              1674.0          1106.500000    567.500000     Sunday
+15 2025-06-16            44               651.0           410.000000    241.000000     Monday
+16 2025-06-17            54               878.0           631.750000    246.250000    Tuesday
+17 2025-06-18            78              1365.0           962.500000    402.500000  Wednesday
+18 2025-06-19            93              1691.0          1082.750000    608.250000   Thursday
+19 2025-06-20           101              1904.0          1260.250000    643.750000     Friday
+20 2025-06-21           176              3885.0          2682.250000   1202.750000   Saturday
+21 2025-06-22           179              3732.0          2449.250000   1282.750000     Sunday
+22 2025-06-23           106              1938.0          1248.250000    689.750000     Monday
+23 2025-06-24           125              2228.0          1445.666667    782.333333    Tuesday
+24 2025-06-25           109              2012.0          1438.500000    573.500000  Wednesday
+25 2025-06-26            64              1108.0           779.500000    328.500000   Thursday
+26 2025-06-27            78              1356.0           903.500000    452.500000     Friday
+27 2025-06-28           141              2674.0          1968.000000    706.000000   Saturday
+28 2025-06-29            96              1918.0          1377.000000    541.000000     Sunday
+29 2025-06-30            53               998.0           688.250000    309.750000     Monday
+30 2025-07-01            71              1331.0           929.000000    402.000000    Tuesday
+31 2025-07-02            95              1548.0          1092.500000    455.500000  Wednesday
+32 2025-07-03           102              1848.0          1234.750000    613.250000   Thursday
+33 2025-07-04            91              1641.0          1121.750000    519.250000     Friday
+34 2025-07-05            91              1742.0          1262.250000    479.750000   Saturday
+35 2025-07-06            79              1383.0          1004.500000    378.500000     Sunday
+36 2025-07-07            31               551.0           405.750000    145.250000     Monday
+37 2025-07-08            66              1200.0           818.000000    382.000000    Tuesday
+38 2025-07-09            74              1194.0           797.250000    396.750000  Wednesday
+39 2025-07-10            94              1825.0          1291.500000    533.500000   Thursday
+40 2025-07-11            53               812.0           565.750000    246.250000     Friday
+41 2025-07-12           133              2617.0          1965.000000    652.000000   Saturday
+42 2025-07-13            92              1721.0          1295.000000    426.000000     Sunday
+43 2025-07-14            63              1095.0           760.500000    334.500000     Monday
+44 2025-07-15            55               966.0           717.500000    248.500000    Tuesday
+45 2025-07-16            34               567.0           415.750000    151.250000  Wednesday
+46 2025-07-17            38               720.0           525.250000    194.750000   Thursday
+47 2025-07-18            35               504.0           369.000000    135.000000     Friday
+48 2025-07-19            93              1482.0          1082.250000    399.750000   Saturday
+49 2025-07-20            69              1095.0           834.250000    260.750000     Sunday
+50 2025-07-21            41               553.0           440.250000    112.750000     Monday
+51 2025-07-22            45               780.0           565.000000    215.000000    Tuesday
+52 2025-07-23            50               711.0           548.750000    162.250000  Wednesday
+53 2025-07-24            21               357.0           261.000000     96.000000   Thursday
+54 2025-07-25            39               638.0           469.250000    168.750000     Friday
+55 2025-07-26            97              1681.0          1265.750000    415.250000   Saturday
+56 2025-07-27            66              1221.0           946.250000    274.750000     Sunday
+57 2025-07-28            45               683.0           489.500000    193.500000     Monday
+58 2025-07-29            49               744.0           560.750000    183.250000    Tuesday
+59 2025-07-30            52               814.0           638.750000    175.250000  Wednesday
+60 2025-07-31            54               754.0           597.750000    156.250000   Thursday
+61 2025-08-01            60              1002.0           719.250000    282.750000     Friday
+62 2025-08-02           123              2527.0          1949.750000    577.250000   Saturday
+63 2025-08-03           119              2430.0          1898.250000    531.750000     Sunday
+64 2025-08-04            53               902.0           665.250000    236.750000     Monday
+65 2025-08-05            53               935.0           740.500000    194.500000    Tuesday
+66 2025-08-06            71              1180.0           870.000000    310.000000  Wednesday
+67 2025-08-07            55               973.0           731.250000    241.750000   Thursday
+68 2025-08-08            70              1175.0           859.500000    315.500000     Friday
+69 2025-08-09            97              1853.0          1426.750000    426.250000   Saturday
+70 2025-08-10            60               976.0           716.250000    259.750000     Sunday
+71 2025-08-11            48               719.0           498.750000    220.250000     Monday
+72 2025-08-12            55               849.0           638.000000    211.000000    Tuesday
+73 2025-08-13            51               885.0           591.250000    293.750000  Wednesday
+74 2025-08-14            42               697.0           506.000000    191.000000   Thursday
+75 2025-08-15            74              1364.0           902.500000    461.500000     Friday
+76 2025-08-16           120              2524.0          1758.166667    765.833333   Saturday
+77 2025-08-17            95              2020.0          1360.250000    659.750000     Sunday
+78 2025-08-18            34               497.0           366.500000    130.500000     Monday
+79 2025-08-19            46               660.0           441.000000    219.000000    Tuesday
+80 2025-08-20            42               666.0           476.500000    189.500000  Wednesday
+81 2025-08-21            23               362.0           251.000000    111.000000   Thursday
+82 2025-08-22            17               223.0           149.000000     74.000000     Friday
+83 2025-08-23            47               765.0           565.000000    200.000000   Saturday
+84 2025-08-24            37               589.0           439.666667    149.333333     Sunday
+85 2025-08-25            15               222.0           151.250000     70.750000     Monday
+86 2025-08-26            17               250.0           196.500000     53.500000    Tuesday
+87 2025-08-27            14               176.0           126.500000     49.500000  Wednesday
+88 2025-08-28            11               132.0           100.000000     32.000000   Thursday
+89 2025-08-29             2                30.0            21.750000      8.250000     Friday
+90 2025-08-30            22               290.0           211.000000     79.000000   Saturday
+91 2025-08-31            11               171.0           125.500000     45.500000     Sunday
+92 2025-09-01             2                49.0            36.000000     13.000000     Monday
+93 2025-09-02            15               232.0           163.500000     68.500000    Tuesday
+94 2025-09-03             2                26.0            17.500000      8.500000  Wednesday
+95 2025-09-04             1                13.0             7.750000      5.250000   Thursday
+
+
+Total outlier records: 6479
+Total impact (excess wins): 33925
+Average daily outliers: 67.5
+
+================================================================================
+LEVEL 1: NATIONAL CARRIER SHARES OUTLIERS
+================================================================================
+
+Top 20 National Share Changes (>2% absolute change):
+        the_date    winner  win_share_pct  prev_share  share_change  daily_wins
+11825 2025-06-26   Comcast      15.911419   19.241027     -3.329608      2019.0
+42528 2025-09-03   Comcast      15.940466   18.692523     -2.752057       739.0
+8379  2025-06-18  Spectrum      18.434812   15.790899      2.643913      2186.0
+7946  2025-06-17  Spectrum      15.790899   18.287693     -2.496794      1749.0
+12085 2025-06-26  Spectrum      16.604933   19.073383     -2.468449      2107.0
+27259 2025-07-29  Spectrum      17.400815   19.497851     -2.097036      1750.0
+10917 2025-06-24   Comcast      20.531657   22.560602     -2.028945      2711.0
+
+================================================================================
+LEVEL 2: NATIONAL H2H PAIR OUTLIERS
+================================================================================
+
+Top 20 H2H National Pairs by IMPACT:
+     the_date            winner        loser  current_wins  rolling_avg_28d     impact    z_score  pct_change
+31 2025-06-24          Spectrum      Comcast          99.0        38.250000  60.750000  18.666783    2.020455
+78 2025-08-15              AT&T     Spectrum          65.0        21.000000  44.000000  23.518989    2.095238
+80 2025-08-16              AT&T     Spectrum          69.0        32.250000  36.750000   9.933339    1.139535
+22 2025-06-21           Comcast     Spectrum          77.0        42.000000  35.000000  16.059101    0.957768
+19 2025-06-19          Spectrum      Comcast          38.0         8.250000  29.750000  10.855920    3.623932
+6  2025-06-07              AT&T      Comcast         128.0        99.750000  28.250000  34.070782    0.283208
+17 2025-06-19           Comcast     Spectrum          45.0        18.250000  26.750000  26.412302    1.517007
+79 2025-08-16              AT&T      Comcast          35.0        10.250000  24.750000  10.866662    2.414634
+86 2025-08-24  Service Electric  Adams Cable          24.0         0.666667  23.333333  49.497475   35.000000
+37 2025-06-27          Spectrum      Verizon          33.0        10.500000  22.500000  10.914103    2.142857
+36 2025-06-27          Spectrum       Altice          33.0        11.250000  21.750000  16.743158    1.933333
+42 2025-07-01          Spectrum      Verizon          31.0        10.500000  20.500000  23.671361    1.952381
+83 2025-08-17              AT&T     Spectrum          28.0         8.000000  20.000000  14.142136    3.000000
+29 2025-06-23           Comcast     Spectrum          30.0        10.500000  19.500000  17.441330    1.857143
+18 2025-06-19           Comcast      Verizon          32.0        12.750000  19.250000  13.015376    1.509804
+9  2025-06-08       Verizon FWA     Spectrum          36.0        18.000000  18.000000  15.129912    0.995338
+32 2025-06-25          Spectrum      Comcast          29.0        11.500000  17.500000  10.552897    2.028571
+27 2025-06-22          Spectrum      Comcast          25.0         8.000000  17.000000  10.251386    3.057143
+57 2025-07-12      T-Mobile FWA     Spectrum          30.0        14.000000  16.000000  11.313708    1.142857
+77 2025-08-15              AT&T      Comcast          34.0        18.000000  16.000000  11.313708    0.888889
+
+================================================================================
+LEVEL 3: STATE CARRIER SHARES OUTLIERS
+================================================================================
+
+Top 20 State Share Changes (>5% absolute change):
+         the_date                 state                         winner  win_share_pct  prev_share  share_change  state_wins
+107637 2025-08-30  District of Columbia                   T-Mobile FWA      56.250000    0.000000     56.250000         9.0
+49970  2025-07-11          South Dakota                   Midcontinent      75.000000   21.052632     53.947368        18.0
+111693 2025-09-03  District of Columbia                    Verizon FWA       0.000000   50.000000    -50.000000         0.0
+35918  2025-06-30  District of Columbia                        Comcast      66.666667   17.647059     49.019608         6.0
+46503  2025-07-08               Vermont                        Comcast      28.000000   74.193548    -46.193548         7.0
+81568  2025-08-07          North Dakota                   Midcontinent      60.000000   14.285714     45.714286        18.0
+112571 2025-09-04              Delaware                        Verizon      50.000000    4.545455     45.454545         3.0
+109661 2025-08-31               Vermont                        Comcast      16.666667   62.068966    -45.402299         3.0
+37063  2025-07-01  District of Columbia                        Comcast      21.428571   66.666667    -45.238095         3.0
+107639 2025-08-30  District of Columbia                    Verizon FWA       6.250000   50.000000    -43.750000         1.0
+98666  2025-08-22  District of Columbia                        Comcast      43.750000    0.000000     43.750000         7.0
+109885 2025-09-01  District of Columbia                    Verizon FWA      50.000000    6.250000     43.750000         5.0
+57464  2025-07-18  District of Columbia                        Comcast      42.857143    0.000000     42.857143         6.0
+107449 2025-08-29               Wyoming                    Verizon FWA       9.090909   50.000000    -40.909091         2.0
+98527  2025-08-22                Alaska  Alaska Communications Systems       6.250000   47.058824    -40.808824         1.0
+14986  2025-06-13  District of Columbia                   T-Mobile FWA      53.846154   13.333333     40.512821         7.0
+80958  2025-08-07              Delaware                        Verizon       9.677419   50.000000    -40.322581         3.0
+111692 2025-09-03  District of Columbia                        Verizon      50.000000   10.000000     40.000000         1.0
+106550 2025-08-29  District of Columbia                        Comcast       0.000000   40.000000    -40.000000         0.0
+104032 2025-08-26          Rhode Island             Cox Communications      64.705882   25.000000     39.705882        11.0
+
+================================================================================
+LEVEL 4: STATE H2H PAIR OUTLIERS
+================================================================================
+
+Top 20 State H2H Pairs by IMPACT (>50 win difference):
+     the_date       state    winner     loser  total_wins  avg_baseline      impact  avg_z_score
+0  2025-08-17  California      AT&T   Comcast       122.0     13.125000  108.875000     5.060388
+1  2025-08-16  California      AT&T   Comcast       124.0     19.083333  104.916667     6.382468
+2  2025-06-06       Texas      AT&T  Spectrum       125.0     20.562500  104.437500     3.053710
+3  2025-06-07       Texas      AT&T   Comcast       158.0     58.000000  100.000000    19.799245
+4  2025-06-22       Texas  Spectrum      AT&T       126.0     28.875000   97.125000     1.544720
+5  2025-06-21     Florida  Spectrum   Comcast       129.0     45.250000   83.750000     5.015324
+6  2025-06-22     Florida  Spectrum   Comcast       121.0     40.625000   80.375000     2.627328
+7  2025-06-21  California   Comcast  Spectrum        99.0     18.833333   80.166667     3.079389
+8  2025-08-16  California      AT&T  Spectrum        93.0     14.500000   78.500000     5.239975
+9  2025-08-17  California      AT&T  Spectrum        92.0     13.583333   78.416667     4.624715
+10 2025-07-04       Texas  Spectrum      AT&T        98.0     23.166667   74.833333     2.311073
+11 2025-06-01       Texas      AT&T  Spectrum       131.0     56.375000   74.625000     1.461428
+12 2025-06-21  New Jersey   Comcast   Verizon       105.0     30.750000   74.250000     2.649497
+13 2025-06-21     Florida   Comcast  Spectrum        90.0     15.812500   74.187500     1.585185
+14 2025-06-22       Texas  Spectrum   Comcast        85.0     10.875000   74.125000     3.413237
+15 2025-06-21    New York  Spectrum   Comcast        86.0     13.750000   72.250000     2.819580
+16 2025-06-01       Texas      AT&T   Comcast       116.0     43.875000   72.125000     0.865659
+17 2025-06-09       Texas      AT&T  Spectrum        91.0     19.833333   71.166667     5.170789
+18 2025-08-15  California      AT&T   Comcast        81.0     10.916667   70.083333     8.744178
+19 2025-08-16       Texas      AT&T   Comcast       115.0     46.000000   69.000000     1.992459
+
+================================================================================
+LEVEL 5: DMA CARRIER PAIR OUTLIERS (SUPPRESSION TARGETS)
+================================================================================
+
+Top 20 DMA Pairs by IMPACT (current - baseline):
+     the_date       state                            dma_name    winner     loser  current_wins  rolling_avg_28d  impact    z_score  is_first_appearance
+0  2025-08-15  California                     Los Angeles, CA      AT&T  Spectrum          65.0            21.00   44.00  23.518989                False
+1  2025-06-21  California                     Los Angeles, CA  Spectrum   Comcast          89.0            45.50   43.50   5.082594                False
+2  2025-06-24  California                     Los Angeles, CA  Spectrum   Comcast          67.0            27.50   39.50  26.333333                False
+3  2025-08-16  California                     Los Angeles, CA      AT&T  Spectrum          69.0            32.25   36.75   9.933339                False
+4  2025-06-24    Illinois                         Chicago, IL   Comcast  Spectrum          57.0            20.50   36.50   7.917962                False
+5  2025-06-29    New York                        New York, NY  Spectrum   Verizon          52.0            16.50   35.50   7.701031                False
+6  2025-06-29    New York                        New York, NY  Spectrum    Altice          51.0            16.00   35.00   7.826238                False
+7  2025-06-22    Illinois                         Chicago, IL   Comcast  Spectrum          75.0            41.00   34.00   4.445299                False
+8  2025-08-17  California                     Los Angeles, CA  Frontier  Spectrum          90.0            58.50   31.50   4.127267                False
+9  2025-08-16  California                     Los Angeles, CA  Frontier  Spectrum          95.0            63.50   31.50   7.000000                False
+10 2025-06-22  California                     Los Angeles, CA  Spectrum   Comcast          70.0            38.50   31.50   4.024922                False
+11 2025-06-01       Texas                         Houston, TX      AT&T   Comcast         103.0            72.25   30.75   2.333248                False
+12 2025-06-21    Illinois                         Chicago, IL   Comcast  Spectrum          77.0            46.75   30.25   3.790516                False
+13 2025-06-18  California                     Los Angeles, CA  Spectrum      AT&T          62.0            31.75   30.25   3.512045                False
+14 2025-08-17  California                     Los Angeles, CA      AT&T  Spectrum          60.0            31.00   29.00   4.673773                False
+15 2025-06-22     Florida            Tampa-St. Petersburg, FL  Spectrum   Comcast          65.0            36.00   29.00   3.359850                False
+16 2025-06-06     Florida            Miami-Ft. Lauderdale, FL   Comcast      AT&T          52.0            23.00   29.00   5.687368                False
+17 2025-06-07       Texas                         Houston, TX      AT&T   Comcast         128.0            99.75   28.25  34.070782                False
+18 2025-08-16  California  San Francisco-Oakland-San Jose, CA      AT&T   Comcast          56.0            28.00   28.00   6.509868                False
+19 2025-08-17       Texas                         Houston, TX      AT&T   Comcast          88.0            60.00   28.00   6.509868                False
+
+
+Outlier Type Distribution:
+First Appearances: 0
+Z-Score outliers (z > 1.5): 98
+High percentage change: 1
+
+================================================================================
+ANALYSIS COMPLETE
+================================================================================
+
+Key Findings:
+- Total outlier DMA-pair-date combinations: 100
+- Unique dates with outliers: 96
+- Unique carriers involved: 10
+- Unique DMAs affected: 21

@@ -14,6 +14,12 @@ import pandas as pd
 # Default database path
 DEFAULT_DB_PATH = os.path.join(os.getcwd(), "data/databases/duck_suppression.db")
 
+# CRITICAL: Only use this database path!
+# DO NOT create databases in other locations (e.g., data/duck_suppression.db)
+# This mistake has been made multiple times and causes confusion.
+assert "data/databases/duck_suppression.db" in DEFAULT_DB_PATH, \
+    "Database path must be data/databases/duck_suppression.db - NOT data/duck_suppression.db!"
+
 # Track temporary database files for cleanup
 _temp_files = []
 

@@ -1,0 +1,133 @@
+{
+  "project_structure": {
+    "database": {
+      "path": "/home/jloli/codebase-comparison/suppression_tools/data/databases/duck_suppression.db",
+      "type": "DuckDB",
+      "size_gb": "6-10",
+      "note": "ALWAYS use this path. No other .db files should exist."
+    },
+    "datasets": {
+      "primary": "gamoshi",
+      "date_range": {
+        "start": "2025-02-19",
+        "end": "2025-09-04"
+      }
+    },
+    "key_tables": {
+      "base_tables": [
+        "gamoshi_preagg_mover",
+        "gamoshi_preagg_non_mover"
+      ],
+      "cube_tables": [
+        "gamoshi_win_mover_cube",
+        "gamoshi_win_non_mover_cube",
+        "gamoshi_loss_mover_cube",
+        "gamoshi_loss_non_mover_cube"
+      ],
+      "rolling_views": [
+        "gamoshi_win_mover_rolling",
+        "gamoshi_win_non_mover_rolling"
+      ]
+    }
+  },
+  "data_schema": {
+    "index_columns": [
+      "the_date",
+      "ds",
+      "mover_ind",
+      "state",
+      "dma_name",
+      "winner",
+      "loser"
+    ],
+    "metric_columns": {
+      "wins": "total_wins",
+      "losses": "total_losses"
+    },
+    "granularity_levels": [
+      "census_block_id (finest)",
+      "dma_name",
+      "state",
+      "h2h (winner-loser pairs)",
+      "national (ds, mover_ind)"
+    ]
+  },
+  "outlier_detection": {
+    "hierarchy": [
+      "1. National (ds, mover_ind) -> most suspicious carriers",
+      "2. H2H National (winner, loser) -> most suspicious pairs",
+      "3. State -> geographical patterns",
+      "4. State H2H -> state-level pair issues",
+      "5. DMA -> market-level issues",
+      "6. DMA H2H -> DMA-level pair issues",
+      "7. Census Block -> pinpoint exact locations"
+    ],
+    "methods": {
+      "zscore": {
+        "threshold": 1.5,
+        "description": "DMA-level outliers, configurable",
+        "applies_to": "rolling_avg_28d, rolling_avg_14d"
+      },
+      "percentage_increase": {
+        "threshold": "30%",
+        "description": "Current vs rolling average"
+      },
+      "first_appearance": {
+        "level": "DMA",
+        "description": "New DMA-winner-loser pairs that never appeared before",
+        "note": "Not census_block level - too many new blocks daily"
+      },
+      "rare_pairs": {
+        "description": "Pairs that appear infrequently in historical data"
+      }
+    },
+    "rolling_windows": {
+      "primary": "28 days",
+      "secondary": "14 days",
+      "minimum_weekend": "4 preceding same DOW",
+      "note": "DOW-aware: weekends have higher volume than weekdays"
+    },
+    "thresholds": {
+      "minimum_wins_current_day": 10,
+      "description": "Ignore DMAs with < 10 wins on current day to avoid noise"
+    }
+  },
+  "suppression_strategy": {
+    "approach": "Remove outlier IMPACT (current - avg), distribute remainder",
+    "not": "Remove ALL records from outlier DMA",
+    "distribution": "Surgical - ideally to census_block level",
+    "focus": "Top-down: National -> H2H -> State -> DMA",
+    "output": "Before/After comparison graphs with overlay (solid + dashed)"
+  },
+  "performance_notes": {
+    "cube_queries": "Blazing fast aggregation at index columns",
+    "views_for_metrics": "Create views for rolling metrics, not columns in cubes",
+    "reason": "Allows tweaking thresholds without rebuilding cubes"
+  },
+  "analysis_dates_of_interest": [
+    "2025-06-19",
+    "2025-08-15",
+    "2025-08-16",
+    "2025-08-17",
+    "2025-08-18"
+  ],
+  "common_queries": {
+    "check_tables": "SELECT table_name FROM information_schema.tables WHERE table_schema='main' ORDER BY table_name",
+    "check_date_row_counts": "SELECT the_date, COUNT(*) as rows FROM {table} GROUP BY the_date ORDER BY the_date",
+    "verify_dow": "SELECT the_date, dayofweek(the_date) as dow, dayname(the_date) as dow_name FROM {table} WHERE the_date = '2025-08-03' LIMIT 1",
+    "outliers_on_date": "SELECT * FROM gamoshi_win_mover_rolling WHERE the_date = '{date}' AND is_outlier = true ORDER BY z_score DESC LIMIT 20"
+  },
+  "git_workflow": {
+    "active_branch": "codex-agent",
+    "never_commit_to": "main",
+    "commit_style": "<type>(scope): short description",
+    "reminder": "Small, focused commits - one logical change per commit"
+  },
+  "critical_reminders": {
+    "database_path": "ALWAYS use /home/jloli/codebase-comparison/suppression_tools/data/duck_suppression.db",
+    "no_multiple_dbs": "Delete any other .db files immediately",
+    "dow_validation": "Sunday=0 in DuckDB dayofweek() but Sunday=1 in dayname()",
+    "check_before_queries": "Always verify table exists before querying",
+    "minimum_threshold": "Filter out current_day < 10 wins to reduce noise"
+  }
+}
