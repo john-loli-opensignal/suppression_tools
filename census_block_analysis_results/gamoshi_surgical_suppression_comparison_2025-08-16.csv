@@ -1,0 +1,326 @@
+dma,state,total_blocks,unique_blocks_to_suppress,total_suppression_records,retention_rate_pct
+"Los Angeles, CA-NV",California,591,275,719,53.46869712351946
+"New York, NY-NJ-CT-PA",New York,383,205,517,46.47519582245431
+"Chicago, IL-IN",Illinois,367,203,552,44.6866485013624
+"Tampa-St. Petersburg, FL",Florida,319,164,425,48.589341692789965
+"Dallas-Ft. Worth, TX",Texas,264,163,427,38.25757575757576
+"Minneapolis-St. Paul, MN-WI",Minnesota,208,158,343,24.03846153846154
+"New York, NY-NJ-CT-PA",New Jersey,257,142,327,44.74708171206226
+"San Francisco-Oakland-San Jose, CA",California,250,137,395,45.2
+"Denver, CO-WY-NE",Colorado,200,132,306,34.0
+"Houston, TX",Texas,225,130,343,42.22222222222222
+"Seattle-Tacoma, WA",Washington,217,125,291,42.3963133640553
+"Cleveland-Akron, OH",Ohio,215,123,281,42.7906976744186
+"Phoenix, AZ",Arizona,225,119,266,47.11111111111111
+"San Antonio, TX",Texas,186,114,274,38.70967741935484
+"Orlando-Daytona Beach-Melbourne, FL",Florida,190,112,293,41.05263157894737
+"Nashville, TN-KY",Tennessee,158,109,236,31.0126582278481
+"Detroit, MI",Michigan,225,108,278,52.0
+"Miami-Ft. Lauderdale, FL",Florida,176,99,244,43.75
+"Pittsburgh, PA-WV-MD",Pennsylvania,151,98,228,35.099337748344375
+"Atlanta, GA-AL-NC",Georgia,171,98,246,42.69005847953216
+"Philadelphia, PA-NJ-DE",Pennsylvania,200,95,223,52.5
+"Indianapolis, IN",Indiana,144,94,227,34.72222222222222
+"Salt Lake City, UT-WY-NV-ID",Utah,113,91,255,19.469026548672566
+"Boston, MA-NH-VT",Massachusetts,188,90,233,52.12765957446809
+"Hartford & New Haven, CT",Connecticut,167,90,210,46.10778443113773
+"Charlotte, NC-SC",North Carolina,151,89,216,41.05960264900662
+"Grand Rapids-Kalamazoo-Battle Creek, MI",Michigan,124,82,193,33.87096774193548
+"Raleigh-Durham, NC-VA",North Carolina,129,79,214,38.759689922480625
+"Baltimore, MD",Maryland,144,75,189,47.91666666666667
+"Washington, DC-VA-MD-WV-PA",Maryland,132,74,165,43.93939393939394
+"Sacramento-Stockton-Modesto, CA",California,169,72,185,57.396449704142015
+"Milwaukee, WI",Wisconsin,133,71,189,46.616541353383454
+"Oklahoma City, OK",Oklahoma,94,68,166,27.659574468085108
+"St. Louis, MO-IL",Missouri,108,66,155,38.88888888888889
+"Washington, DC-VA-MD-WV-PA",Virginia,129,65,159,49.6124031007752
+"Knoxville, TN-KY",Tennessee,86,65,152,24.418604651162788
+"Norfolk-Portsmouth-Newport News, VA-NC",Virginia,103,64,146,37.86407766990291
+"Birmingham, AL",Alabama,103,64,148,37.86407766990291
+"Greensboro-High Point-Winston Salem, NC-VA",North Carolina,107,63,153,41.1214953271028
+"Wilkes Barre-Scranton-Hazelton, PA",Pennsylvania,107,63,154,41.1214953271028
+"Wichita-Hutchinson Plus, KS",Kansas,80,63,302,21.25
+"Portland, OR-WA",Oregon,109,62,137,43.11926605504588
+"San Diego, CA",California,97,62,168,36.08247422680412
+"Las Vegas, NV",Nevada,107,60,136,43.925233644859816
+"Little Rock-Pine Bluff, AR",Arkansas,78,59,139,24.358974358974358
+"Kansas City, MO-KS",Missouri,81,58,154,28.39506172839506
+"Columbus, OH",Ohio,104,55,139,47.11538461538461
+"Philadelphia, PA-NJ-DE",New Jersey,113,55,115,51.32743362831859
+"Harrisburg-Lancaster-Lebanon-York, PA",Pennsylvania,98,54,123,44.89795918367347
+"West Palm Beach-Ft. Pierce, FL",Florida,95,53,128,44.21052631578947
+"Cincinnati, OH-KY-IN",Ohio,82,53,128,35.36585365853659
+"Greenville-Spartanburg-Asheville-Anderson, SC-NC-GA",South Carolina,76,53,140,30.263157894736842
+"Memphis, TN-MS-AR",Tennessee,84,52,127,38.095238095238095
+"Albuquerque-Santa Fe, NM-CO-AZ",New Mexico,61,49,123,19.672131147540984
+"Buffalo, NY-PA",New York,82,49,127,40.243902439024396
+"New Orleans, LA-MS",Louisiana,72,48,113,33.33333333333333
+"Jacksonville, FL-GA",Florida,72,47,119,34.72222222222222
+"Columbia, SC",South Carolina,64,46,119,28.125
+"Green Bay-Appleton, WI-MI",Wisconsin,74,46,114,37.83783783783784
+"Traverse City-Cadillac, MI",Michigan,62,45,90,27.419354838709676
+"Burlington-Plattsburgh, VT-NY-NH",Vermont,53,44,94,16.9811320754717
+"Tulsa, OK-KS",Oklahoma,66,44,120,33.33333333333333
+"Champaign & Springfield-Decatur, IL",Illinois,65,44,103,32.30769230769231
+"Flint-Saginaw-Bay City, MI",Michigan,69,44,103,36.231884057971016
+"Omaha, NE-IA-MO",Nebraska,61,44,134,27.86885245901639
+"St. Louis, MO-IL",Illinois,63,43,107,31.746031746031743
+"Portland-Auburn, ME-NH",Maine,65,42,95,35.38461538461539
+"Ft. Myers-Naples, FL",Florida,66,42,117,36.36363636363637
+"Fresno-Visalia, CA",California,73,42,106,42.465753424657535
+"Dayton, OH",Ohio,72,40,116,44.44444444444444
+"Des Moines-Ames, IA",Iowa,45,38,94,15.555555555555555
+"Boston, MA-NH-VT",New Hampshire,70,38,82,45.714285714285715
+"Roanoke-Lynchburg, VA-WV",Virginia,50,38,90,24.0
+"Richmond-Petersburg, VA",Virginia,67,38,95,43.28358208955223
+"Austin, TX",Texas,53,37,81,30.18867924528302
+"Louisville, KY-IN",Kentucky,62,36,96,41.935483870967744
+"Lexington, KY",Kentucky,59,35,89,40.67796610169492
+"Madison, WI",Wisconsin,56,33,79,41.07142857142857
+"Charleston-Huntington, WV-KY-OH",West Virginia,55,33,80,40.0
+"Providence-New Bedford, RI-MA",Rhode Island,56,33,68,41.07142857142857
+"Ft. Wayne, IN-OH",Indiana,50,33,87,34.0
+"Rochester, NY",New York,51,32,68,37.254901960784316
+"Kansas City, MO-KS",Kansas,38,32,90,15.789473684210526
+"Syracuse, NY",New York,46,32,75,30.434782608695656
+"Charleston, SC",South Carolina,45,32,81,28.888888888888886
+"Greenville-Spartanburg-Asheville-Anderson, SC-NC-GA",North Carolina,45,32,87,28.888888888888886
+"Mobile-Pensacola, AL-FL-MS",Alabama,42,31,80,26.190476190476193
+"Jackson, MS",Mississippi,48,31,78,35.41666666666667
+"Huntsville-Decatur, AL-TN",Alabama,44,31,81,29.545454545454547
+"Minot-Bismarck-Dickinson, ND-MT-SD",North Dakota,36,31,66,13.88888888888889
+"Peoria-Bloomington, IL",Illinois,42,30,63,28.57142857142857
+"Bangor, ME",Maine,48,30,58,37.5
+"Waco-Temple-Bryan, TX",Texas,35,30,76,14.285714285714285
+"Ft. Smith-Fayetteville-Springdale-Rogers, AR-OK",Arkansas,35,30,71,14.285714285714285
+"Albany-Schenectady-Troy, NY-MA-VT",New York,50,29,61,42.0
+"Lincoln & Hastings-Kearney, NE-KS",Nebraska,43,29,59,32.55813953488372
+"Johnstown-Altoona-State College, PA",Pennsylvania,46,29,63,36.95652173913043
+"Honolulu, HI",Hawaii,41,29,64,29.268292682926827
+"Springfield, MO-AR",Missouri,34,29,88,14.705882352941178
+"Colorado Springs-Pueblo, CO",Colorado,40,28,72,30.0
+"Lansing, MI",Michigan,45,28,72,37.77777777777778
+"Odessa-Midland, TX-NM",Texas,33,28,84,15.151515151515152
+"Amarillo, TX-NM-OK",Texas,29,27,77,6.896551724137931
+"Montgomery-Selma, AL",Alabama,39,27,59,30.76923076923077
+"La Crosse-Eau Claire, WI-MN",Wisconsin,38,27,62,28.947368421052634
+"Tri-Cities, TN-VA-KY",Tennessee,34,26,68,23.52941176470588
+"Greenville-New Bern-Washington, NC",North Carolina,41,26,69,36.58536585365854
+"New York, NY-NJ-CT-PA",Connecticut,48,25,59,47.91666666666667
+"Savannah, GA-SC",Georgia,31,25,55,19.35483870967742
+"Chattanooga, TN-GA-NC",Tennessee,39,24,51,38.46153846153847
+"Tucson, AZ",Arizona,38,24,64,36.84210526315789
+"Mobile-Pensacola, AL-FL-MS",Florida,38,24,68,36.84210526315789
+"Myrtle Beach-Florence, SC-NC",South Carolina,40,24,53,40.0
+"Tyler-Longview, TX",Texas,34,23,59,32.35294117647059
+"Sioux Falls, SD-MN-IA-NE",South Dakota,32,23,58,28.125
+"South Bend-Elkhart, IN-MI",Indiana,35,23,48,34.285714285714285
+"Cedar Rapids-Waterloo-Iowa City & Dubuque, IA",Iowa,30,23,54,23.333333333333332
+"Corpus Christi, TX",Texas,35,23,50,34.285714285714285
+"Toledo, OH-MI",Ohio,38,23,50,39.473684210526315
+"Spokane, WA-ID-MT-OR",Washington,30,22,60,26.666666666666668
+"Youngstown, OH-PA",Ohio,31,22,53,29.03225806451613
+"Terre Haute, IN-IL",Indiana,27,22,61,18.51851851851852
+"Chicago, IL-IN",Indiana,41,22,55,46.34146341463415
+"Erie, PA",Pennsylvania,29,21,43,27.586206896551722
+"Topeka, KS",Kansas,26,21,49,19.230769230769234
+"Baton Rouge, LA-MS",Louisiana,35,21,50,40.0
+"Dothan, AL-GA",Alabama,27,21,55,22.22222222222222
+"Wilmington, NC",North Carolina,29,21,50,27.586206896551722
+"Tri-Cities, TN-VA-KY",Virginia,24,20,46,16.666666666666664
+"Rockford, IL",Illinois,26,20,50,23.076923076923077
+"Springfield-Holyoke, MA",Massachusetts,31,20,43,35.483870967741936
+"Columbia-Jefferson City, MO",Missouri,25,20,57,20.0
+"Reno, NV-CA",Nevada,29,20,51,31.03448275862069
+"Gainesville, FL",Florida,25,20,51,20.0
+"Harlingen-Weslaco-Brownsville-McAllen, TX",Texas,32,20,51,37.5
+"Albany, GA",Georgia,21,19,49,9.523809523809524
+"Wausau-Rhinelander, WI",Wisconsin,28,19,42,32.142857142857146
+"Columbus, GA-AL",Georgia,22,19,57,13.636363636363635
+"Paducah-Cape Girardeau-Harrisburg, KY-MO-IL-TN",Missouri,25,19,49,24.0
+"Evansville, IN-KY-IL",Kentucky,20,19,44,5.0
+"Eugene, OR",Oregon,31,19,44,38.70967741935484
+"Sioux City, IA-NE-SD",Iowa,21,19,50,9.523809523809524
+"Tallahassee-Thomasville, FL-GA",Florida,27,19,66,29.629629629629626
+"El Paso, TX-NM",Texas,33,18,38,45.45454545454545
+"Philadelphia, PA-NJ-DE",Delaware,26,18,50,30.76923076923077
+"Macon, GA-AL",Georgia,20,18,39,10.0
+"Rochester-Mason City-Austin, MN-IA-IL",Minnesota,21,18,41,14.285714285714285
+"Louisville, KY-IN",Indiana,28,17,37,39.285714285714285
+"Abilene-Sweetwater, TX",Texas,20,17,38,15.0
+"Portland, OR-WA",Washington,24,17,43,29.166666666666668
+"Davenport-Rock Island-Moline, IA-IL",Illinois,22,17,39,22.727272727272727
+"Lubbock, TX",Texas,24,17,49,29.166666666666668
+"Marquette, MI-WI",Michigan,17,16,46,5.88235294117647
+"Columbus-Tupelo-West Point-Houston, MS-AL",Mississippi,19,16,38,15.789473684210526
+"Panama City, FL",Florida,20,16,43,20.0
+"Chico-Redding, CA",California,31,16,37,48.38709677419355
+"Binghamton, NY",New York,18,16,27,11.11111111111111
+"Augusta-Aiken, GA-SC",South Carolina,19,16,36,15.789473684210526
+"Jackson, TN",Tennessee,18,16,32,11.11111111111111
+"Davenport-Rock Island-Moline, IA-IL",Iowa,20,15,45,25.0
+"Minneapolis-St. Paul, MN-WI",Wisconsin,19,15,29,21.052631578947366
+"Fargo, ND-MN",Minnesota,17,15,34,11.76470588235294
+"Yakima-Pasco-Richland-Kennewick, WA-OR",Washington,21,15,43,28.57142857142857
+"Shreveport, LA-TX-AR-OK",Texas,18,15,39,16.666666666666664
+"Providence-New Bedford, RI-MA",Massachusetts,28,15,29,46.42857142857143
+"Bluefield-Beckley-Oak Hill, WV-VA",West Virginia,21,15,35,28.57142857142857
+"Washington, DC-VA-MD-WV-PA",District of Columbia,17,14,42,17.647058823529413
+"Omaha, NE-IA-MO",Iowa,17,14,37,17.647058823529413
+"Charlotte, NC-SC",South Carolina,19,14,32,26.31578947368421
+"Charleston-Huntington, WV-KY-OH",Kentucky,15,14,39,6.666666666666667
+"Paducah-Cape Girardeau-Harrisburg, KY-MO-IL-TN",Kentucky,14,14,28,0.0
+"Paducah-Cape Girardeau-Harrisburg, KY-MO-IL-TN",Illinois,19,14,33,26.31578947368421
+"Billings, MT-WY",Montana,17,14,30,17.647058823529413
+"Anchorage, AK",Alaska,17,14,28,17.647058823529413
+"Shreveport, LA-TX-AR-OK",Louisiana,23,13,33,43.47826086956522
+"Duluth-Superior, MN-WI-MI",Minnesota,18,13,34,27.77777777777778
+"Salisbury, MD-DE",Maryland,17,13,25,23.52941176470588
+"Savannah, GA-SC",South Carolina,15,13,35,13.333333333333334
+"Cincinnati, OH-KY-IN",Kentucky,16,12,33,25.0
+"Memphis, TN-MS-AR",Arkansas,14,12,29,14.285714285714285
+"Wichita Falls & Lawton, TX-OK",Oklahoma,12,12,44,0.0
+"Medford-Klamath Falls, OR-CA",Oregon,16,12,28,25.0
+"Lake Charles, LA",Louisiana,12,12,37,0.0
+"Joplin-Pittsburg, MO-KS-OK",Missouri,14,12,36,14.285714285714285
+"Joplin-Pittsburg, MO-KS-OK",Kansas,13,12,26,7.6923076923076925
+"Fargo, ND-MN",North Dakota,13,12,25,7.6923076923076925
+"Evansville, IN-KY-IL",Indiana,15,11,27,26.666666666666668
+"Idaho Falls-Pocatello, ID-WY",Idaho,16,11,36,31.25
+"Boise, ID-OR",Idaho,14,11,31,21.428571428571427
+"Charlottesville, VA",Virginia,16,11,26,31.25
+"Monterey-Salinas, CA",California,23,10,30,56.52173913043478
+"Augusta-Aiken, GA-SC",Georgia,12,10,27,16.666666666666664
+"Memphis, TN-MS-AR",Mississippi,14,10,24,28.57142857142857
+"Tallahassee-Thomasville, FL-GA",Georgia,15,10,30,33.33333333333333
+"Great Falls, MT",Montana,12,9,18,25.0
+"Alexandria, LA",Louisiana,10,9,23,10.0
+"Salisbury, MD-DE",Delaware,11,9,19,18.181818181818183
+"Clarksburg-Weston, WV",West Virginia,14,9,25,35.714285714285715
+"Shreveport, LA-TX-AR-OK",Arkansas,9,9,29,0.0
+"Beaumont-Port Arthur, TX",Texas,15,9,30,40.0
+"Utica, NY",New York,17,9,19,47.05882352941176
+"Rochester-Mason City-Austin, MN-IA-IL",Iowa,9,9,23,0.0
+"Quincy-Hannibal-Keokuk, IL-MO-IA",Missouri,9,9,23,0.0
+"Monroe-El Dorado, LA-AR",Louisiana,13,9,25,30.76923076923077
+"Casper-Riverton, WY",Wyoming,10,9,25,10.0
+"Nashville, TN-KY",Kentucky,10,8,21,20.0
+"Lafayette, LA",Louisiana,10,8,16,20.0
+"Wichita Falls & Lawton, TX-OK",Texas,14,8,23,42.857142857142854
+"Jonesboro, AR",Arkansas,11,8,20,27.27272727272727
+"Mankato, MN",Minnesota,8,8,25,0.0
+"St. Joseph, MO-KS",Missouri,8,8,25,0.0
+"Springfield, MO-AR",Arkansas,8,8,22,0.0
+"Sherman-Ada, OK-TX",Oklahoma,11,8,24,27.27272727272727
+"Bowling Green, KY",Kentucky,9,8,23,11.11111111111111
+"New Orleans, LA-MS",Mississippi,8,8,23,0.0
+"Elmira, NY-PA",New York,15,8,17,46.666666666666664
+"Albany-Schenectady-Troy, NY-MA-VT",Massachusetts,9,7,14,22.22222222222222
+"Biloxi-Gulfport, MS",Mississippi,8,7,17,12.5
+"Spokane, WA-ID-MT-OR",Idaho,9,7,15,22.22222222222222
+"Bakersfield, CA",California,11,7,19,36.36363636363637
+"Charleston-Huntington, WV-KY-OH",Ohio,13,7,16,46.15384615384615
+"Santa Barbara-Santa Maria-San Luis Obispo, CA",California,24,7,20,70.83333333333334
+"Sioux City, IA-NE-SD",Nebraska,7,7,21,0.0
+"Columbus, GA-AL",Alabama,10,7,20,30.0
+"Denver, CO-WY-NE",Nebraska,8,7,12,12.5
+"Parkersburg, WV-OH",West Virginia,10,7,15,30.0
+"Greenwood-Greenville, MS-AL",Mississippi,10,7,13,30.0
+"Hattiesburg-Laurel, MS",Mississippi,8,7,30,12.5
+"Lima, OH",Ohio,12,7,16,41.66666666666667
+"Chattanooga, TN-GA-NC",Georgia,8,7,26,12.5
+"Reno, NV-CA",California,8,7,21,12.5
+"Twin Falls, ID",Idaho,8,7,17,12.5
+"Norfolk-Portsmouth-Newport News, VA-NC",North Carolina,14,6,12,57.14285714285714
+"Salt Lake City, UT-WY-NV-ID",Wyoming,6,6,10,0.0
+"South Bend-Elkhart, IN-MI",Michigan,12,6,14,50.0
+"Youngstown, OH-PA",Pennsylvania,10,6,13,40.0
+"Sherman-Ada, OK-TX",Texas,6,6,15,0.0
+"Rapid City, SD-WY-MT",South Dakota,9,6,15,33.33333333333333
+"Quincy-Hannibal-Keokuk, IL-MO-IA",Illinois,9,6,14,33.33333333333333
+"Duluth-Superior, MN-WI-MI",Wisconsin,11,6,17,45.45454545454545
+"North Platte, NE",Nebraska,7,6,13,14.285714285714285
+"Lafayette, IN",Indiana,10,6,20,40.0
+"Burlington-Plattsburgh, VT-NY-NH",New Hampshire,7,6,9,14.285714285714285
+"Pittsburgh, PA-WV-MD",West Virginia,6,6,20,0.0
+"Missoula, MT",Montana,7,6,11,14.285714285714285
+"Wheeling-Steubenville, WV-OH",West Virginia,11,6,11,45.45454545454545
+"Harrisonburg, VA-WV",Virginia,11,6,15,45.45454545454545
+"Watertown, NY",New York,13,6,12,53.84615384615385
+"Monroe-El Dorado, LA-AR",Arkansas,6,5,8,16.666666666666664
+"Sioux Falls, SD-MN-IA-NE",Iowa,5,5,12,0.0
+"Butte-Bozeman, MT",Montana,7,5,22,28.57142857142857
+"Yuma-El Centro, AZ-CA",Arizona,5,5,16,0.0
+"Juneau, AK",Alaska,6,5,13,16.666666666666664
+"Washington, DC-VA-MD-WV-PA",West Virginia,8,5,10,37.5
+"Presque Isle, ME-NH",Maine,7,5,9,28.57142857142857
+"Bluefield-Beckley-Oak Hill, WV-VA",Virginia,5,5,17,0.0
+"Knoxville, TN-KY",Kentucky,4,4,8,0.0
+"Meridian, MS-AL",Mississippi,8,4,19,50.0
+"Amarillo, TX-NM-OK",New Mexico,4,4,15,0.0
+"Wheeling-Steubenville, WV-OH",Ohio,5,4,12,20.0
+"Grand Junction-Montrose, CO",Colorado,6,4,10,33.33333333333333
+"Unmeasured Alaska, AK",Alaska,6,4,7,33.33333333333333
+"Joplin-Pittsburg, MO-KS-OK",Oklahoma,5,4,7,20.0
+"Rapid City, SD-WY-MT",Wyoming,5,4,12,20.0
+"Portland-Auburn, ME-NH",New Hampshire,6,4,9,33.33333333333333
+"Paducah-Cape Girardeau-Harrisburg, KY-MO-IL-TN",Tennessee,4,4,7,0.0
+"Myrtle Beach-Florence, SC-NC",North Carolina,5,4,8,20.0
+"Palm Springs, CA",California,9,4,12,55.55555555555556
+"El Paso, TX-NM",New Mexico,5,4,8,20.0
+"Burlington-Plattsburgh, VT-NY-NH",New York,5,4,12,20.0
+"Victoria, TX",Texas,5,4,16,20.0
+"Salt Lake City, UT-WY-NV-ID",Idaho,4,4,7,0.0
+"Terre Haute, IN-IL",Illinois,4,3,6,25.0
+"Helena, MT",Montana,5,3,4,40.0
+"Greenville-Spartanburg-Asheville-Anderson, SC-NC-GA",Georgia,4,3,8,25.0
+"Huntsville-Decatur, AL-TN",Tennessee,3,3,7,0.0
+"Ft. Smith-Fayetteville-Springdale-Rogers, AR-OK",Oklahoma,3,3,5,0.0
+"Jacksonville, FL-GA",Georgia,3,3,11,0.0
+"Billings, MT-WY",Wyoming,3,3,6,0.0
+"Shreveport, LA-TX-AR-OK",Oklahoma,3,3,9,0.0
+"Sioux Falls, SD-MN-IA-NE",Minnesota,4,3,6,25.0
+"Fairbanks, AK",Alaska,6,3,5,50.0
+"Evansville, IN-KY-IL",Illinois,4,3,7,25.0
+"Denver, CO-WY-NE",Wyoming,3,3,8,0.0
+"Cheyenne-Scottsbluff, WY-NE",Wyoming,6,3,9,50.0
+"Minot-Bismarck-Dickinson, ND-MT-SD",Montana,3,3,5,0.0
+"La Crosse-Eau Claire, WI-MN",Minnesota,3,3,5,0.0
+"Laredo, TX",Texas,5,3,11,40.0
+"Harrisonburg, VA-WV",West Virginia,3,3,5,0.0
+"Eureka, CA",California,7,3,7,57.14285714285714
+"Albuquerque-Santa Fe, NM-CO-AZ",Colorado,2,2,3,0.0
+"Meridian, MS-AL",Alabama,3,2,6,33.33333333333333
+"Ft. Wayne, IN-OH",Ohio,2,2,6,0.0
+"Quincy-Hannibal-Keokuk, IL-MO-IA",Iowa,2,2,6,0.0
+"Pittsburgh, PA-WV-MD",Maryland,2,2,8,0.0
+"Elmira, NY-PA",Pennsylvania,3,2,4,33.33333333333333
+"New York, NY-NJ-CT-PA",Pennsylvania,2,2,5,0.0
+"Amarillo, TX-NM-OK",Oklahoma,2,2,4,0.0
+"Washington, DC-VA-MD-WV-PA",Pennsylvania,2,2,3,0.0
+"Tulsa, OK-KS",Kansas,2,2,3,0.0
+"Toledo, OH-MI",Michigan,6,2,4,66.66666666666666
+"Salt Lake City, UT-WY-NV-ID",Nevada,2,2,7,0.0
+"San Angelo, TX",Texas,5,2,6,60.0
+"Boston, MA-NH-VT",Vermont,3,2,3,33.33333333333333
+"Boise, ID-OR",Oregon,2,2,3,0.0
+"Medford-Klamath Falls, OR-CA",California,1,1,2,0.0
+"Lincoln & Hastings-Kearney, NE-KS",Kansas,1,1,2,0.0
+"Atlanta, GA-AL-NC",Alabama,1,1,2,0.0
+"Alpena, MI",Michigan,2,1,2,50.0
+"Cheyenne-Scottsbluff, WY-NE",Nebraska,1,1,6,0.0
+"Roanoke-Lynchburg, VA-WV",West Virginia,1,1,1,0.0
+"Parkersburg, WV-OH",Ohio,1,1,2,0.0
+"Columbus-Tupelo-West Point-Houston, MS-AL",Alabama,1,1,2,0.0
+"Ottumwa-Kirksville, IA-MO",Missouri,1,1,2,0.0
+"Ottumwa-Kirksville, IA-MO",Iowa,1,1,1,0.0
+"Greensboro-High Point-Winston Salem, NC-VA",Virginia,2,1,1,50.0
+"Dothan, AL-GA",Georgia,1,1,2,0.0
+"Sioux Falls, SD-MN-IA-NE",Nebraska,1,1,1,0.0
+"Buffalo, NY-PA",Pennsylvania,2,1,1,50.0
+"Sioux City, IA-NE-SD",South Dakota,1,1,2,0.0
+"Cincinnati, OH-KY-IN",Indiana,3,1,2,66.66666666666666
+"Bend, OR",Oregon,1,1,1,0.0
+"Tri-Cities, TN-VA-KY",Kentucky,1,1,3,0.0
+"Yuma-El Centro, AZ-CA",California,6,1,2,83.33333333333334
+"Zanesville, OH",Ohio,4,1,4,75.0

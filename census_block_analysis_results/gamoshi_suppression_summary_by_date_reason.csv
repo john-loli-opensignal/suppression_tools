@@ -1,0 +1,46 @@
+the_date,suppression_reason,num_blocks,total_value,total_records
+2025-06-19,first_appearance,8511,3005.0,8601
+2025-06-19,first_appearance; geographic_concentration,2855,2963.0,2867
+2025-06-19,geographic_concentration,2768,2887.0,2921
+2025-06-19,geographic_concentration; statistical_outlier_dow,10,43.0,42
+2025-06-19,geographic_concentration; statistical_outlier_dow; volume_spike,2,19.0,20
+2025-06-19,geographic_concentration; volume_spike,53,64.0,66
+2025-06-19,statistical_outlier_dow,38,97.0,113
+2025-06-19,statistical_outlier_dow; volume_spike,14,35.0,36
+2025-06-19,volume_spike,394,467.0,492
+2025-08-15,first_appearance,7864,2727.0,7998
+2025-08-15,first_appearance; geographic_concentration,2824,2975.0,2854
+2025-08-15,geographic_concentration,2451,2587.0,2613
+2025-08-15,geographic_concentration; statistical_outlier_dow,7,58.0,90
+2025-08-15,geographic_concentration; statistical_outlier_dow; volume_spike,5,28.0,34
+2025-08-15,geographic_concentration; volume_spike,62,85.0,83
+2025-08-15,statistical_outlier_dow,50,119.0,136
+2025-08-15,statistical_outlier_dow; volume_spike,20,76.0,85
+2025-08-15,volume_spike,362,514.0,532
+2025-08-16,first_appearance,14231,5371.0,14517
+2025-08-16,first_appearance; geographic_concentration,4301,4500.0,4337
+2025-08-16,geographic_concentration,3092,3372.0,3432
+2025-08-16,geographic_concentration; statistical_outlier_dow,11,64.0,65
+2025-08-16,geographic_concentration; statistical_outlier_dow; volume_spike,7,61.0,66
+2025-08-16,geographic_concentration; volume_spike,80,92.0,97
+2025-08-16,statistical_outlier_dow,109,240.0,283
+2025-08-16,statistical_outlier_dow; volume_spike,111,329.0,368
+2025-08-16,volume_spike,620,928.0,983
+2025-08-17,first_appearance,11200,4089.0,11327
+2025-08-17,first_appearance; geographic_concentration,3606,3784.0,3647
+2025-08-17,geographic_concentration,2754,2965.0,2989
+2025-08-17,geographic_concentration; statistical_outlier_dow,6,33.0,32
+2025-08-17,geographic_concentration; statistical_outlier_dow; volume_spike,6,51.0,62
+2025-08-17,geographic_concentration; volume_spike,80,100.0,102
+2025-08-17,statistical_outlier_dow,86,195.0,237
+2025-08-17,statistical_outlier_dow; volume_spike,62,228.0,257
+2025-08-17,volume_spike,519,803.0,836
+2025-08-18,first_appearance,8425,3470.0,9148
+2025-08-18,first_appearance; geographic_concentration,2415,2730.0,2620
+2025-08-18,geographic_concentration,1993,2286.0,2265
+2025-08-18,geographic_concentration; statistical_outlier_dow,7,35.0,34
+2025-08-18,geographic_concentration; statistical_outlier_dow; volume_spike,3,10.0,16
+2025-08-18,geographic_concentration; volume_spike,70,118.0,123
+2025-08-18,statistical_outlier_dow,21,43.0,44
+2025-08-18,statistical_outlier_dow; volume_spike,18,63.0,61
+2025-08-18,volume_spike,333,511.0,515
