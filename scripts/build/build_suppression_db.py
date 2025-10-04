@@ -392,8 +392,8 @@ Examples:
     
     parser.add_argument(
         "-o", "--output",
-        default=os.path.join(os.getcwd(), "duck_suppression.db"),
-        help="Output database file path (default: ./duck_suppression.db)"
+        default=os.path.join(os.getcwd(), "data/databases/duck_suppression.db"),
+        help="Output database file path (default: ./data/databases/duck_suppression.db)"
     )
     
     parser.add_argument(

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 import time
 
-DB_PATH = "duck_suppression.db"
+DB_PATH = "data/databases/duck_suppression.db"
 PARQUET_STORE = "duckdb_partitioned_store"
 
 

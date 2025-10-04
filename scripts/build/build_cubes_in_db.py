@@ -316,8 +316,8 @@ Examples:
     
     parser.add_argument(
         "--db",
-        default=os.path.join(os.getcwd(), "duck_suppression.db"),
-        help="Path to DuckDB database (default: ./duck_suppression.db)"
+        default=os.path.join(os.getcwd(), "data/databases/duck_suppression.db"),
+        help="Path to DuckDB database (default: ./data/databases/duck_suppression.db)"
     )
     
     parser.add_argument(
