@@ -1,0 +1,362 @@
+[
+  {
+    "the_date":"2025-06-19",
+    "winner":"AT&T",
+    "z":2.8492373166,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-06-19",
+    "winner":"Blue Stream Fiber",
+    "z":3.1774305176,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-06-19",
+    "winner":"Coast Communications Company",
+    "z":2.8688433096,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-06-19",
+    "winner":"Fastwyre Broadband",
+    "z":2.5089251577,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-06-19",
+    "winner":"Medicine Park Telephone Company",
+    "z":2.7075172973,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-06-19",
+    "winner":"Ozarks Electric Cooperative",
+    "z":3.5181317518,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-06-19",
+    "winner":"Tachus",
+    "z":2.5883129604,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-06-19",
+    "winner":"Visionary Communications",
+    "z":3.7458714367,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-15",
+    "winner":"AT&T",
+    "z":4.6500870312,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-15",
+    "winner":"Central Utah Telephone",
+    "z":11.5139931458,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-15",
+    "winner":"Hunter@Home",
+    "z":2.7724313341,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-15",
+    "winner":"LR Communications",
+    "z":2.5237341362,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-15",
+    "winner":"Pocketinet Communications",
+    "z":4.7738982062,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-15",
+    "winner":"Smithville Telephone Co.",
+    "z":2.54358744,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-15",
+    "winner":"Wyyerd Communications",
+    "z":3.5690660321,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-15",
+    "winner":"Yadkin Valley Telephone",
+    "z":4.6364088029,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"AT&T",
+    "z":15.2459394236,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Antietam Broadband",
+    "z":6.8307594719,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Arbuckle Communications",
+    "z":5.1559909602,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"AtLink Services",
+    "z":3.6106467573,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"C Spire Fiber",
+    "z":2.8289424033,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"CenturyLink",
+    "z":9.2222890344,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Fort Collins Connexion",
+    "z":2.658465971,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Frontier",
+    "z":3.2846740655,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Kit Carson Electric Cooperative",
+    "z":4.3454485006,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Metalink Technologies",
+    "z":3.5347579972,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Metronet",
+    "z":3.1813909621,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"North Alabama Electric Cooperative",
+    "z":3.5852273841,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Spectrum",
+    "z":3.1744754045,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Starlink",
+    "z":2.5102007904,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"The Ringgold Telephone Company",
+    "z":3.588412201,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-16",
+    "winner":"Verizon FWA",
+    "z":2.7854424923,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"AT&T",
+    "z":8.780049817,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"Arvig",
+    "z":2.5585761647,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"CenturyLink",
+    "z":5.008149517,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"Conexon Connect",
+    "z":2.5726052549,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"Frontier",
+    "z":4.9662976223,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"Holston Connect",
+    "z":4.5889797851,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"Long Lines Internet",
+    "z":3.0703497572,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"North Georgia Network Cooperative",
+    "z":3.3191073201,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"Spectrum",
+    "z":3.6703289802,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"The North-Eastern Pennsylvania Telephone Company",
+    "z":4.5986909067,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"United Fiber",
+    "z":2.8845258932,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"Vyve Broadband",
+    "z":3.2033047537,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"WhiteSky Communications",
+    "z":3.3332097597,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-17",
+    "winner":"Yadkin Valley Telephone",
+    "z":3.4724246114,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"BEK Communications Cooperative",
+    "z":2.9535768113,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Ben Lomand Rural Telephone Cooperative",
+    "z":3.0452549269,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Central Access",
+    "z":2.8805617465,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Comporium",
+    "z":4.0379350237,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Conexon Connect",
+    "z":3.6016059272,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Consolidated Telcom (ND)",
+    "z":4.6209756871,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"East Mississippi Connect",
+    "z":2.7042222127,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Glasgow Electric Plant Board",
+    "z":3.0566267376,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Midwest Energy & Communications",
+    "z":4.6677674174,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Northeast Texas Broadband",
+    "z":3.8200606372,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Rock Solid Internet & Telephone",
+    "z":5.1739134899,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"Scottsboro Electric Power Board",
+    "z":3.5458530466,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"VNET Fiber",
+    "z":3.3531099811,
+    "nat_outlier_pos":true
+  },
+  {
+    "the_date":"2025-08-18",
+    "winner":"WOW!",
+    "z":3.4225774953,
+    "nat_outlier_pos":true
+  }
+]
