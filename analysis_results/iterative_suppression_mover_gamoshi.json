@@ -1,0 +1,182 @@
+{
+  "dataset": "gamoshi",
+  "mover_type": "mover",
+  "analysis_period": {
+    "start": "2025-06-01",
+    "end": "2025-09-04"
+  },
+  "configuration": {
+    "z_threshold": 1.5,
+    "min_wins_threshold": 10,
+    "max_rounds": 3
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "timestamp": "2025-10-04T13:37:10.783048",
+      "outliers_detected": 4896,
+      "records_suppressed": 4896,
+      "metrics_before": {
+        "national": {
+          "total_volatility": 0.8755499499330383,
+          "max_range": 7.813127335311634,
+          "mean_std": 0.022731458075056474,
+          "num_carriers": 627,
+          "top_volatile": [
+            {
+              "carrier": "SWOI",
+              "cv": 4.0,
+              "range": 0.006853539853334247
+            },
+            {
+              "carrier": "360 Broadband",
+              "cv": 2.6457513110645907,
+              "range": 0.004428305730227615
+            },
+            {
+              "carrier": "Unwired Ltd.",
+              "cv": 2.64575131106459,
+              "range": 0.006250781347668459
+            },
+            {
+              "carrier": "Southwestern Wireless",
+              "cv": 2.6396838229985558,
+              "range": 0.05772005772005772
+            },
+            {
+              "carrier": "San Bruno Cable",
+              "cv": 2.530737219609916,
+              "range": 0.009636696540425942
+            }
+          ]
+        },
+        "h2h_records": 295188,
+        "total_wins": 1173776
+      },
+      "metrics_after": {
+        "national": {
+          "total_volatility": 0.867099633991852,
+          "max_range": 4.468573957238286,
+          "mean_std": 0.022609371336024853,
+          "num_carriers": 627,
+          "top_volatile": [
+            {
+              "carrier": "SWOI",
+              "cv": 4.0,
+              "range": 0.007824113919098662
+            },
+            {
+              "carrier": "360 Broadband",
+              "cv": 2.6457513110645907,
+              "range": 0.005151983513652756
+            },
+            {
+              "carrier": "Unwired Ltd.",
+              "cv": 2.6457513110645907,
+              "range": 0.00670465973851827
+            },
+            {
+              "carrier": "Southwestern Wireless",
+              "cv": 2.5860012346107495,
+              "range": 0.058616647127784284
+            },
+            {
+              "carrier": "San Bruno Cable",
+              "cv": 2.51373434036757,
+              "range": 0.010068465565847765
+            }
+          ]
+        },
+        "h2h_records": 295155,
+        "total_wins": 1080612
+      }
+    },
+    {
+      "round": 2,
+      "timestamp": "2025-10-04T13:37:52.498442",
+      "outliers_detected": 1,
+      "records_suppressed": 1,
+      "metrics_before": {
+        "national": {
+          "total_volatility": 0.867099633991852,
+          "max_range": 4.468573957238286,
+          "mean_std": 0.022609371336024853,
+          "num_carriers": 627,
+          "top_volatile": [
+            {
+              "carrier": "SWOI",
+              "cv": 4.0,
+              "range": 0.007824113919098662
+            },
+            {
+              "carrier": "360 Broadband",
+              "cv": 2.6457513110645907,
+              "range": 0.005151983513652756
+            },
+            {
+              "carrier": "Unwired Ltd.",
+              "cv": 2.6457513110645907,
+              "range": 0.00670465973851827
+            },
+            {
+              "carrier": "Southwestern Wireless",
+              "cv": 2.5860012346107495,
+              "range": 0.058616647127784284
+            },
+            {
+              "carrier": "San Bruno Cable",
+              "cv": 2.51373434036757,
+              "range": 0.010068465565847765
+            }
+          ]
+        },
+        "h2h_records": 295155,
+        "total_wins": 1080612
+      },
+      "metrics_after": {
+        "national": {
+          "total_volatility": 0.867100081505782,
+          "max_range": 4.468573957238286,
+          "mean_std": 0.0226107961578523,
+          "num_carriers": 627,
+          "top_volatile": [
+            {
+              "carrier": "SWOI",
+              "cv": 4.0,
+              "range": 0.007824113919098662
+            },
+            {
+              "carrier": "360 Broadband",
+              "cv": 2.6457513110645907,
+              "range": 0.005151983513652756
+            },
+            {
+              "carrier": "Unwired Ltd.",
+              "cv": 2.6457513110645907,
+              "range": 0.00670465973851827
+            },
+            {
+              "carrier": "Southwestern Wireless",
+              "cv": 2.5860012346107495,
+              "range": 0.058616647127784284
+            },
+            {
+              "carrier": "San Bruno Cable",
+              "cv": 2.51373434036757,
+              "range": 0.010068465565847765
+            }
+          ]
+        },
+        "h2h_records": 295155,
+        "total_wins": 1080599
+      }
+    }
+  ],
+  "summary": {
+    "total_rounds": 2,
+    "total_outliers": 4897,
+    "initial_volatility": 0.8755499499330383,
+    "final_volatility": 0.867100081505782,
+    "improvement_pct": 0.9650926743702629
+  }
+}
