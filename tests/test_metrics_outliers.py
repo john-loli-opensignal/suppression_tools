@@ -5,9 +5,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from suppression_tools.src.metrics import national_timeseries, pair_metrics, competitor_view
-from suppression_tools.src.outliers import national_outliers
-from suppression_tools import db
+from tools.src.metrics import national_timeseries, pair_metrics, competitor_view
+from tools.src.outliers import national_outliers
+from tools import db
 
 
 # Use actual database for testing
@@ -159,8 +159,8 @@ def test_database_has_cube_tables(db_path):
 
 def test_imports():
     """Test that all modules import without errors"""
-    from suppression_tools import db
-    from suppression_tools.src import metrics, outliers
+    from tools import db
+    from tools.src import metrics, outliers
     
     # Check functions exist
     assert hasattr(metrics, 'national_timeseries')

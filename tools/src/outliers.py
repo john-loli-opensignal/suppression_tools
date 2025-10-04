@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 import pandas as pd
 
 # Import from db module for connection management
-from suppression_tools import db
+from tools import db
 
 
 def _build_extra_filters(state: str | None, dma_name: str | None) -> str:

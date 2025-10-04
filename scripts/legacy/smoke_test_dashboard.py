@@ -20,8 +20,8 @@ from datetime import timedelta
 import duckdb
 import pandas as pd
 
-from suppression_tools.src.plan import base_national_series
-from suppression_tools.src.outliers import national_outliers
+from tools.src.plan import base_national_series
+from tools.src.outliers import national_outliers
 
 
 def find_store_glob() -> str:

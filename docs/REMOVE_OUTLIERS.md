@@ -149,51 +149,38 @@ This analysis demonstrates a **top-down, census block-level suppression approach
 
 ## 📈 Before/After Win Share Visualizations
 
-### Movers
+> **Note:** Visualization graphs will be regenerated with actual before/after data from the dashboard.
+> The script `regenerate_overlay_graphs.py` is available for creating proper overlay visualizations
+> where solid lines (before) are layered on top and dashed lines (after) are underneath for clear comparison.
 
-#### Time Series Overlay (Solid = Before, Dashed = After)
-![Win Share Overlay - Movers](./suppression_analysis_results/graphs/overlay_timeseries_mover_True.png)
+### Expected Results Based on Analysis
+
+#### Movers
+**Key Expected Changes:**
+- **Pavlov Media:** Massive spike on 08-16 should be reduced from ~8% to ~2%
+- **Apogee Telecom:** Spike on 08-16 should be suppressed from ~6% to ~1%
+- **WhiteSky Communications:** Multi-day spike (08-16 to 08-18) should normalize
+- **Spectrum, Comcast, T-Mobile:** Should show minimal impact, preserving legitimate market share
+- Overall market distribution should look more realistic after suppression
 
 **Observations:**
-- Solid lines show win share **before** suppression
-- Dashed lines show win share **after** suppression
-- Target dates marked with red vertical lines (06-19, 08-15 to 08-18)
+- Target dates: 2025-06-19, 2025-08-15, 2025-08-16, 2025-08-17, 2025-08-18
 - Outlier spikes are clearly visible on 2025-08-16, 2025-08-17, 2025-08-18
-- After suppression (dashed lines), win shares return to more normal levels
-- Pavlov Media, Apogee Telecom, WhiteSky Communications show dramatic reductions
-- Other carriers show minimal changes, preserving legitimate data
+- After suppression, win shares should return to more normal levels
+- Other carriers should show minimal changes, preserving legitimate data
 
-#### Target Date Comparison (Blue = Before, Orange = After)
-![Target Dates Comparison - Movers](./suppression_analysis_results/graphs/overlay_target_dates_mover_True.png)
-
-**Key Changes:**
-- **Pavlov Media:** Massive spike on 08-16 reduced from ~8% to ~2%
-- **Apogee Telecom:** Spike on 08-16 suppressed from ~6% to ~1%
-- **WhiteSky Communications:** Multi-day spike (08-16 to 08-18) normalized
-- **Spectrum, Comcast, T-Mobile:** Minimal impact, preserving legitimate market share
-- Overall market distribution looks more realistic after suppression
-
-### Non-Movers
-
-#### Time Series Overlay (Solid = Before, Dashed = After)
-![Win Share Overlay - Non-Movers](./suppression_analysis_results/graphs/overlay_timeseries_mover_False.png)
+#### Non-Movers
+**Key Expected Changes:**
+- **AT&T:** Significant spike on 08-16 should be suppressed (50% → 38%)
+- **CenturyLink:** Spike on 08-16 should normalize (15% → 12%)
+- **Central Utah Telephone:** Spike on 08-15 should normalize
+- **Spectrum, T-Mobile, Verizon FWA:** Should show minimal changes, data preserved
+- Overall market distribution should look more realistic and stable after suppression
 
 **Observations:**
-- Solid lines = before suppression, dashed lines = after suppression
-- AT&T spike on 08-16 clearly visible and suppressed (from ~50% to ~40%)
-- CenturyLink spike on 08-16 reduced (from ~15% to ~12%)
-- Central Utah Telephone spike on 08-15 normalized
-- Market shares more stable after suppression
-- Natural leaders (Spectrum, T-Mobile, AT&T) remain dominant
-
-#### Target Date Comparison (Blue = Before, Orange = After)
-![Target Dates Comparison - Non-Movers](./suppression_analysis_results/graphs/overlay_target_dates_mover_False.png)
-
-**Key Changes:**
-- **AT&T:** Significant spike on 08-16 suppressed (50% → 38%)
-- **CenturyLink:** Spike on 08-16 normalized (15% → 12%)
-- **Spectrum, T-Mobile, Verizon FWA:** Minimal changes, data preserved
-- Overall market distribution looks more realistic and stable after suppression
+- Market shares should be more stable after suppression
+- Natural leaders (Spectrum, T-Mobile, AT&T) should remain dominant
+- Suppression targets anomalies, not legitimate market positions
 
 ---
 

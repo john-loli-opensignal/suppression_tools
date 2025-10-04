@@ -12,8 +12,8 @@ import json
 import importlib.util
 from datetime import date
 
-from suppression_tools.src import metrics
-from suppression_tools.src import outliers
+from tools.src import metrics
+from tools.src import outliers
 
 
 # Cache expensive min/max date queries

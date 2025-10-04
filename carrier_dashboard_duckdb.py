@@ -5,13 +5,13 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objs as go
 
-from suppression_tools import db
-from suppression_tools.src import metrics, outliers
+from tools import db
+from tools.src import metrics, outliers
 
 
 def get_default_db_path() -> str:
     """Get default database path"""
-    return os.path.join(os.getcwd(), "duck_suppression.db")
+    return os.path.join(os.getcwd(), "data/databases/duck_suppression.db")
 
 
 def init_session_state():

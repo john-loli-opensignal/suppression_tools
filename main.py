@@ -4,8 +4,8 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 import plotly.graph_objs as go
-from suppression_tools.src.plan import scan_base_outliers, build_plan_for_winner_dates, base_national_series
-from suppression_tools.src.util import expand
+from tools.src.plan import scan_base_outliers, build_plan_for_winner_dates, base_national_series
+from tools.src.util import expand
 
 
 def default_store() -> str:
