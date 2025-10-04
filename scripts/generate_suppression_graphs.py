@@ -60,7 +60,7 @@ def get_win_share_data(mover_ind, start_date, end_date):
     
     sql = f"""
     SELECT 
-        the_date,
+        the_date::VARCHAR as the_date,
         winner,
         SUM(total_wins) as total_wins
     FROM {table_name}
@@ -72,30 +72,33 @@ def get_win_share_data(mover_ind, start_date, end_date):
     return db.query(sql, str(DB_PATH))
 
 
-def apply_suppressions(df, suppression_data):
+def apply_suppressions(df, pair_outlier_data):
     """
-    Apply suppressions to win share data.
+    Apply suppressions to win share data based on pair outliers.
+    
+    Strategy: For each date-winner-loser-DMA outlier detected, subtract those wins
+    from the carrier's total.
     
     Returns modified DataFrame with suppressed wins removed.
     """
-    if not suppression_data:
+    if not pair_outlier_data:
         return df
     
     df_suppressed = df.copy()
     
     # Build suppression index for fast lookup
-    # suppression_data is a list of census blocks with suppression flags
+    # pair_outlier_data is a list of H2H pair outliers with win counts
     suppressions = {}
-    for block in suppression_data:
-        if block.get('should_suppress', False):
-            date = block['the_date']
-            winner = block['winner']
-            wins = block.get('current_wins', 0)
-            
-            key = (date, winner)
-            if key not in suppressions:
-                suppressions[key] = 0
-            suppressions[key] += wins
+    for pair in pair_outlier_data:
+        date = pair['the_date']
+        winner = pair['winner']
+        # Try different field names for wins
+        wins = pair.get('wins', pair.get('pair_wins_current', pair.get('current_wins', 0)))
+        
+        key = (date, winner)
+        if key not in suppressions:
+            suppressions[key] = 0
+        suppressions[key] += wins
     
     # Apply suppressions
     for idx, row in df_suppressed.iterrows():
@@ -132,12 +135,12 @@ def plot_win_share_overlay(mover_ind):
     """
     print(f"\n[INFO] Generating win share overlay for mover_ind={mover_ind}")
     
-    # Load suppression data
-    suppression_file = f"census_block_suppression_mover_{mover_ind}.json"
-    suppression_data = load_json(suppression_file)
+    # Load pair outlier data (this is what we suppress, not census blocks)
+    pair_outlier_file = f"pair_outliers_mover_{mover_ind}.json"
+    pair_outlier_data = load_json(pair_outlier_file)
     
-    if not suppression_data:
-        print(f"[WARNING] No suppression data found for mover_ind={mover_ind}")
+    if not pair_outlier_data:
+        print(f"[WARNING] No pair outlier data found for mover_ind={mover_ind}")
         return
     
     # Determine date range (30 days before first target to 7 days after last target)
@@ -148,9 +151,16 @@ def plot_win_share_overlay(mover_ind):
     df_before = get_win_share_data(mover_ind, start_date, end_date)
     df_before = calculate_win_share(df_before)
     
-    # Get after data (with suppressions applied)
-    df_after = apply_suppressions(df_before.copy(), suppression_data)
+    # Get after data (with suppressions applied based on pair outliers)
+    df_after = apply_suppressions(df_before.copy(), pair_outlier_data)
     df_after = calculate_win_share(df_after)
+    
+    # Report suppression impact
+    total_before = df_before['total_wins'].sum()
+    total_after = df_after['total_wins'].sum()
+    suppressed_amount = total_before - total_after
+    suppression_pct = (suppressed_amount / total_before * 100) if total_before > 0 else 0
+    print(f"[INFO] Suppressed {suppressed_amount:,.0f} wins ({suppression_pct:.2f}% of total)")
     
     # Get top 10 carriers by average win share
     top_carriers = (
@@ -162,57 +172,73 @@ def plot_win_share_overlay(mover_ind):
     )
     
     # Create figure
-    fig, ax = plt.subplots(figsize=(16, 10))
+    fig, ax = plt.subplots(figsize=(18, 10))
     
-    # Color palette
-    colors = plt.cm.tab10(range(10))
+    # Color palette - more colors for better distinction
+    colors = plt.cm.tab20(range(20))
     
-    # Plot each carrier - AFTER first (dashed, underneath)
+    # Plot each carrier - AFTER first (dashed, underneath, lighter)
     for i, carrier in enumerate(top_carriers):
         carrier_data_after = df_after[df_after['winner'] == carrier].sort_values('the_date')
         if not carrier_data_after.empty:
             ax.plot(
                 pd.to_datetime(carrier_data_after['the_date']),
                 carrier_data_after['win_share'],
-                label=f"{carrier} (after)",
                 color=colors[i],
                 linestyle='--',
-                linewidth=2,
-                alpha=0.7,
-                zorder=1
+                linewidth=2.5,
+                alpha=0.6,
+                zorder=1,
+                label=None  # Don't show in legend
             )
     
-    # Plot each carrier - BEFORE second (solid, on top)
+    # Plot each carrier - BEFORE second (solid, on top, darker)
     for i, carrier in enumerate(top_carriers):
         carrier_data_before = df_before[df_before['winner'] == carrier].sort_values('the_date')
         if not carrier_data_before.empty:
             ax.plot(
                 pd.to_datetime(carrier_data_before['the_date']),
                 carrier_data_before['win_share'],
-                label=f"{carrier} (before)",
+                label=carrier,
                 color=colors[i],
                 linestyle='-',
-                linewidth=2.5,
-                alpha=0.9,
+                linewidth=3,
+                alpha=0.95,
                 zorder=2
             )
     
-    # Highlight target dates
+    # Highlight target dates with vertical lines
     for target_date in TARGET_DATES:
         target_dt = datetime.strptime(target_date, "%Y-%m-%d")
-        ax.axvline(target_dt, color='red', linestyle=':', alpha=0.5, linewidth=1.5, zorder=0)
+        ax.axvline(target_dt, color='red', linestyle=':', alpha=0.6, linewidth=2, zorder=0)
+    
+    # Add text annotation for legend
+    ax.text(
+        0.02, 0.98,
+        'Solid = Before Suppression\nDashed = After Suppression',
+        transform=ax.transAxes,
+        fontsize=11,
+        verticalalignment='top',
+        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+    )
     
     # Format
-    ax.set_xlabel('Date', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Win Share (%)', fontsize=12, fontweight='bold')
+    ax.set_xlabel('Date', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Win Share (%)', fontsize=13, fontweight='bold')
     ax.set_title(
         f'Win Share Over Time: {"Movers" if mover_ind else "Non-Movers"}\n'
-        f'Before (solid) vs After (dashed) Suppression',
+        f'Before (solid) vs After (dashed) Suppression - {suppressed_amount:,.0f} wins removed ({suppression_pct:.2f}%)',
         fontsize=14,
         fontweight='bold'
     )
     ax.grid(True, alpha=0.3)
-    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
+    ax.legend(
+        bbox_to_anchor=(1.05, 1),
+        loc='upper left',
+        fontsize=10,
+        title='Top 10 Carriers',
+        title_fontsize=11
+    )
     
     # Format x-axis
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
