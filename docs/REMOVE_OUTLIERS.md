@@ -149,38 +149,70 @@ This analysis demonstrates a **top-down, census block-level suppression approach
 
 ## 📈 Before/After Win Share Visualizations
 
-> **Note:** Visualization graphs will be regenerated with actual before/after data from the dashboard.
-> The script `regenerate_overlay_graphs.py` is available for creating proper overlay visualizations
-> where solid lines (before) are layered on top and dashed lines (after) are underneath for clear comparison.
+### Movers
 
-### Expected Results Based on Analysis
+**Win Share Time Series - Movers**
 
-#### Movers
-**Key Expected Changes:**
-- **Pavlov Media:** Massive spike on 08-16 should be reduced from ~8% to ~2%
-- **Apogee Telecom:** Spike on 08-16 should be suppressed from ~6% to ~1%
-- **WhiteSky Communications:** Multi-day spike (08-16 to 08-18) should normalize
-- **Spectrum, Comcast, T-Mobile:** Should show minimal impact, preserving legitimate market share
-- Overall market distribution should look more realistic after suppression
+![Win Share Overlay - Movers](../analysis_results/suppression/graphs/win_share_overlay_mover_True.png)
 
-**Observations:**
-- Target dates: 2025-06-19, 2025-08-15, 2025-08-16, 2025-08-17, 2025-08-18
-- Outlier spikes are clearly visible on 2025-08-16, 2025-08-17, 2025-08-18
-- After suppression, win shares should return to more normal levels
-- Other carriers should show minimal changes, preserving legitimate data
+**Key Observations:**
+- **Solid lines (before)** are layered on top showing original data
+- **Dashed lines (after)** underneath show suppressed data
+- Red vertical dotted lines mark target dates: 2025-06-19, 2025-08-15 to 2025-08-18
+- Notable suppressions visible for carriers with extreme outliers
+- Top carriers (Spectrum, Comcast, T-Mobile) show minimal changes, preserving legitimate market share
 
-#### Non-Movers
-**Key Expected Changes:**
-- **AT&T:** Significant spike on 08-16 should be suppressed (50% → 38%)
-- **CenturyLink:** Spike on 08-16 should normalize (15% → 12%)
-- **Central Utah Telephone:** Spike on 08-15 should normalize
-- **Spectrum, T-Mobile, Verizon FWA:** Should show minimal changes, data preserved
-- Overall market distribution should look more realistic and stable after suppression
+**Outlier Detection Metrics - Movers**
 
-**Observations:**
-- Market shares should be more stable after suppression
-- Natural leaders (Spectrum, T-Mobile, AT&T) should remain dominant
-- Suppression targets anomalies, not legitimate market positions
+![Outlier Metrics - Movers](../analysis_results/suppression/graphs/outlier_metrics_mover_True.png)
+
+**Analysis:**
+- **Top Panel:** Z-scores show extreme outliers on 2025-08-16 (z > 18)
+- **Middle Panel:** Thousands of H2H pair outliers detected per date
+- **Bottom Panel:** Census blocks and wins suppressed - surgical precision applied
+
+**Top National Outliers - Movers**
+
+![Carrier Z-Scores - Movers](../analysis_results/suppression/graphs/carrier_zscore_mover_True.png)
+
+**Key Findings:**
+- Extreme outliers (z > 5) in red: Pavlov Media, Apogee Telecom, WhiteSky Communications
+- All flagged carriers significantly exceed the 2.5 threshold (gray dashed line)
+- Multi-day patterns visible for some carriers
+
+---
+
+### Non-Movers
+
+**Win Share Time Series - Non-Movers**
+
+![Win Share Overlay - Non-Movers](../analysis_results/suppression/graphs/win_share_overlay_mover_False.png)
+
+**Key Observations:**
+- **Solid lines (before)** show original market shares
+- **Dashed lines (after)** show suppressed data
+- Target dates marked with red vertical lines
+- Major carriers (AT&T, Spectrum, T-Mobile, Verizon FWA) maintain dominant positions
+- Suppression removes anomalies while preserving legitimate market positions
+
+**Outlier Detection Metrics - Non-Movers**
+
+![Outlier Metrics - Non-Movers](../analysis_results/suppression/graphs/outlier_metrics_mover_False.png)
+
+**Analysis:**
+- **Top Panel:** Lower z-scores than movers, but still significant (z > 15 on 2025-08-16)
+- **Middle Panel:** Fewer pair outliers compared to movers (more stable market)
+- **Bottom Panel:** More wins suppressed despite fewer census blocks (higher concentration)
+
+**Top National Outliers - Non-Movers**
+
+![Carrier Z-Scores - Non-Movers](../analysis_results/suppression/graphs/carrier_zscore_mover_False.png)
+
+**Key Findings:**
+- AT&T dominates extreme outliers on 2025-08-16 (z > 15)
+- Central Utah Telephone shows extreme behavior on 2025-08-15
+- CenturyLink, Frontier show multiple moderate outliers
+- More concentrated around specific carriers than movers
 
 ---
 
