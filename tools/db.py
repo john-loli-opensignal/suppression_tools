@@ -12,7 +12,7 @@ import pandas as pd
 
 
 # Default database path
-DEFAULT_DB_PATH = os.path.join(os.getcwd(), "duck_suppression.db")
+DEFAULT_DB_PATH = os.path.join(os.getcwd(), "data/databases/duck_suppression.db")
 
 # Track temporary database files for cleanup
 _temp_files = []

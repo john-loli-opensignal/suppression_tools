@@ -14,7 +14,7 @@ from tools import db
 @pytest.fixture
 def db_path():
     """Get path to test database (must exist)"""
-    path = os.path.join(os.getcwd(), "duck_suppression.db")
+    path = os.path.join(os.getcwd(), "data/databases/duck_suppression.db")
     if not os.path.exists(path):
         pytest.skip(f"Database not found: {path}. Run: uv run build_suppression_db.py <preagg.parquet>")
     return path

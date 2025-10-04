@@ -18,7 +18,7 @@ import plotly.graph_objects as go
 from pathlib import Path
 
 # Database configuration
-DB_PATH = "duck_suppression.db"
+DB_PATH = "data/databases/duck_suppression.db"
 
 st.set_page_config(
     page_title="Census Block Outlier Detection",
