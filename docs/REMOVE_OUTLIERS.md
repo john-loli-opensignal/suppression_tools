@@ -115,7 +115,7 @@ This analysis demonstrates a **top-down, pair-level suppression approach** that 
 
 **Win Share Time Series - Movers**
 
-![Win Share Overlay - Movers](../analysis_results/suppression/graphs/win_share_overlay_mover_True.png)
+![Win Share Overlay - Movers](../analysis_results/suppression/graphs/win_share_overlay_mover_True.png?raw=true)
 
 **Key Observations:**
 - **Solid lines** show original win share (before suppression)
@@ -127,7 +127,7 @@ This analysis demonstrates a **top-down, pair-level suppression approach** that 
 
 **Outlier Detection Metrics - Movers**
 
-![Outlier Metrics - Movers](../analysis_results/suppression/graphs/outlier_metrics_mover_True.png)
+![Outlier Metrics - Movers](../analysis_results/suppression/graphs/outlier_metrics_mover_True.png?raw=true)
 
 **Analysis:**
 - **Top Panel:** Z-scores show extreme outliers on 2025-08-16 (z > 18)
@@ -136,7 +136,7 @@ This analysis demonstrates a **top-down, pair-level suppression approach** that 
 
 **Top National Outliers - Movers**
 
-![Carrier Z-Scores - Movers](../analysis_results/suppression/graphs/carrier_zscore_mover_True.png)
+![Carrier Z-Scores - Movers](../analysis_results/suppression/graphs/carrier_zscore_mover_True.png?raw=true)
 
 **Key Findings:**
 - Extreme outliers (z > 5) in red: Pavlov Media, Apogee Telecom, WhiteSky Communications
@@ -149,7 +149,7 @@ This analysis demonstrates a **top-down, pair-level suppression approach** that 
 
 **Win Share Time Series - Non-Movers**
 
-![Win Share Overlay - Non-Movers](../analysis_results/suppression/graphs/win_share_overlay_mover_False.png)
+![Win Share Overlay - Non-Movers](../analysis_results/suppression/graphs/win_share_overlay_mover_False.png?raw=true)
 
 **Key Observations:**
 - **Solid lines** show original market shares
@@ -161,7 +161,7 @@ This analysis demonstrates a **top-down, pair-level suppression approach** that 
 
 **Outlier Detection Metrics - Non-Movers**
 
-![Outlier Metrics - Non-Movers](../analysis_results/suppression/graphs/outlier_metrics_mover_False.png)
+![Outlier Metrics - Non-Movers](../analysis_results/suppression/graphs/outlier_metrics_mover_False.png?raw=true)
 
 **Analysis:**
 - **Top Panel:** Lower z-scores than movers, but still significant (z > 15 on 2025-08-16 for AT&T)
@@ -170,7 +170,7 @@ This analysis demonstrates a **top-down, pair-level suppression approach** that 
 
 **Top National Outliers - Non-Movers**
 
-![Carrier Z-Scores - Non-Movers](../analysis_results/suppression/graphs/carrier_zscore_mover_False.png)
+![Carrier Z-Scores - Non-Movers](../analysis_results/suppression/graphs/carrier_zscore_mover_False.png?raw=true)
 
 **Key Findings:**
 - AT&T dominates extreme outliers on 2025-08-16 (z > 15)

@@ -162,8 +162,27 @@ def plot_win_share_overlay(mover_ind):
     suppression_pct = (suppressed_amount / total_before * 100) if total_before > 0 else 0
     print(f"[INFO] Suppressed {suppressed_amount:,.0f} wins ({suppression_pct:.2f}% of total)")
     
-    # Get top 10 carriers by average win share
-    top_carriers = (
+    # Calculate win share delta for each carrier on target dates to find most impacted
+    suppressions_by_carrier = {}
+    for target_date in TARGET_DATES:
+        before_day = df_before[df_before['the_date'] == target_date]
+        after_day = df_after[df_after['the_date'] == target_date]
+        
+        for carrier in before_day['winner'].unique():
+            before_ws = before_day[before_day['winner'] == carrier]['win_share'].values
+            after_ws = after_day[after_day['winner'] == carrier]['win_share'].values
+            
+            if len(before_ws) > 0 and len(after_ws) > 0:
+                delta = abs(before_ws[0] - after_ws[0])
+                suppressions_by_carrier[carrier] = suppressions_by_carrier.get(carrier, 0) + delta
+    
+    # Get top carriers - prioritize those with suppressions, then by average win share
+    carriers_with_suppressions = sorted(suppressions_by_carrier.items(), key=lambda x: x[1], reverse=True)
+    
+    # Mix: top 5 by suppression impact + top 5 by win share
+    top_suppressed = [c[0] for c in carriers_with_suppressions[:5]]
+    
+    top_by_share = (
         df_before.groupby('winner')['win_share']
         .mean()
         .sort_values(ascending=False)
@@ -171,13 +190,25 @@ def plot_win_share_overlay(mover_ind):
         .index.tolist()
     )
     
+    # Combine, keeping order by share but highlighting suppressed carriers
+    top_carriers = []
+    for carrier in top_by_share:
+        if carrier not in top_carriers:
+            top_carriers.append(carrier)
+    for carrier in top_suppressed:
+        if carrier not in top_carriers:
+            top_carriers.append(carrier)
+    top_carriers = top_carriers[:10]
+    
+    print(f"[INFO] Top carriers with suppressions: {', '.join(top_suppressed[:3])}")
+    
     # Create figure
     fig, ax = plt.subplots(figsize=(18, 10))
     
     # Color palette - more colors for better distinction
     colors = plt.cm.tab20(range(20))
     
-    # Plot each carrier - AFTER first (dashed, underneath, lighter)
+    # Plot each carrier - DASHED (after) first, underneath
     for i, carrier in enumerate(top_carriers):
         carrier_data_after = df_after[df_after['winner'] == carrier].sort_values('the_date')
         if not carrier_data_after.empty:
@@ -186,25 +217,30 @@ def plot_win_share_overlay(mover_ind):
                 carrier_data_after['win_share'],
                 color=colors[i],
                 linestyle='--',
-                linewidth=2.5,
-                alpha=0.6,
+                linewidth=3.5,
+                alpha=0.7,
                 zorder=1,
                 label=None  # Don't show in legend
             )
     
-    # Plot each carrier - BEFORE second (solid, on top, darker)
+    # Plot each carrier - SOLID (before) second, on top
     for i, carrier in enumerate(top_carriers):
         carrier_data_before = df_before[df_before['winner'] == carrier].sort_values('the_date')
         if not carrier_data_before.empty:
+            marker = '*' if carrier in top_suppressed else None
+            label_suffix = ' ⚠' if carrier in top_suppressed else ''
             ax.plot(
                 pd.to_datetime(carrier_data_before['the_date']),
                 carrier_data_before['win_share'],
-                label=carrier,
+                label=carrier + label_suffix,
                 color=colors[i],
                 linestyle='-',
-                linewidth=3,
-                alpha=0.95,
-                zorder=2
+                linewidth=3.5,
+                alpha=1.0,
+                zorder=2,
+                marker=marker,
+                markersize=8 if marker else 0,
+                markevery=0.1
             )
     
     # Highlight target dates with vertical lines
@@ -215,11 +251,11 @@ def plot_win_share_overlay(mover_ind):
     # Add text annotation for legend
     ax.text(
         0.02, 0.98,
-        'Solid = Before Suppression\nDashed = After Suppression',
+        'SOLID LINE = Before Suppression (On Top)\nDASHED LINE = After Suppression (Underneath)\n* = Carrier had significant suppressions\nRed vertical lines = Target dates',
         transform=ax.transAxes,
-        fontsize=11,
+        fontsize=10,
         verticalalignment='top',
-        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.9)
     )
     
     # Format
@@ -236,7 +272,7 @@ def plot_win_share_overlay(mover_ind):
         bbox_to_anchor=(1.05, 1),
         loc='upper left',
         fontsize=10,
-        title='Top 10 Carriers',
+        title='Top Carriers',
         title_fontsize=11
     )
     
