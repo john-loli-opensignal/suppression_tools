@@ -34,3 +34,5 @@ suppressions/processed/
 
 # Misc
 *.log
+.idea/
+__pycache__/

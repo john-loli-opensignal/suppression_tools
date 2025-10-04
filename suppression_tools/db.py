@@ -655,7 +655,7 @@ def pair_outliers_from_cube(
     elif end_date:
         date_filter = f"AND the_date <= DATE '{end_date}'"
     
-    outlier_filter = """
+    outlier_filter = f"""
     AND (
         pair_zscore > {z_thresh} OR
         is_pct_spike = TRUE OR
