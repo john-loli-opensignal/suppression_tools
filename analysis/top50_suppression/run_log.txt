@@ -1,0 +1,153 @@
+================================================================================
+TOP 50 CARRIER SUPPRESSION TEST - 3 ROUNDS
+================================================================================
+Database: data/databases/duck_suppression.db
+Output: analysis/top50_suppression
+
+Loaded 50 top carriers
+
+
+================================================================================
+ROUND 1
+================================================================================
+
+📊 Analyzing gamoshi_win_mover_cube...
+  National data points: 9891
+  H2H data points: 30181
+  🚨 National anomalies (before): 0
+  🚨 H2H anomalies (before): 0
+
+🔍 Detecting outliers...
+  Found 17881 outliers
+
+  Top 10 outliers by impact:
+  the_date   winner    loser                 dma_name  current_wins  rolling_avg   z_score outlier_reason
+2025-06-07     AT&T  Comcast              Houston, TX         128.0   100.000000 28.000000  Z-Score > 1.5
+2025-05-03     AT&T  Comcast              Houston, TX         114.0    80.000000  3.777778  Z-Score > 1.5
+2025-05-31     AT&T Spectrum     Dallas-Ft. Worth, TX         114.0    95.333333  2.465263  Z-Score > 1.5
+2025-05-03 Frontier Spectrum          Los Angeles, CA         108.0    78.333333  2.185077  Z-Score > 1.5
+2025-06-07  Comcast     AT&T              Houston, TX         108.0    83.333333  6.103417  Z-Score > 1.5
+2025-05-24  Comcast     AT&T              Atlanta, GA         105.0    86.666667  5.703234  Z-Score > 1.5
+2025-05-24     AT&T Spectrum     Dallas-Ft. Worth, TX         104.0    92.333333  4.635863  Z-Score > 1.5
+2025-04-27     AT&T  Comcast              Houston, TX         103.0    51.000000 10.007405  Z-Score > 1.5
+2025-05-04 Frontier Spectrum Tampa-St. Petersburg, FL         103.0    61.333333  6.560799  Z-Score > 1.5
+2025-06-01     AT&T  Comcast              Houston, TX         103.0    66.333333  3.128841  Z-Score > 1.5
+
+💉 Calculating suppression amounts...
+  Total wins to suppress: 127,780
+
+✂️  Applying suppressions to create gamoshi_win_mover_round1...
+  Created table with 1,156,409 rows
+
+📊 Analyzing gamoshi_win_mover_round1 (after suppression)...
+  🚨 National anomalies (after): 0
+  🚨 H2H anomalies (after): 670
+
+  📈 Improvement:
+     National: 0 anomalies removed (0.0%)
+     H2H: -670 anomalies removed (-67000.0%)
+
+================================================================================
+ROUND 2
+================================================================================
+
+📊 Analyzing gamoshi_win_mover_round1...
+  National data points: 9878
+  H2H data points: 30033
+  🚨 National anomalies (before): 0
+  🚨 H2H anomalies (before): 670
+
+🔍 Detecting outliers...
+  Found 17896 outliers
+
+  Top 10 outliers by impact:
+  the_date   winner    loser                 dma_name  current_wins  rolling_avg   z_score outlier_reason
+2025-06-07     AT&T  Comcast              Houston, TX         128.0   100.000000 28.000000  Z-Score > 1.5
+2025-05-03     AT&T  Comcast              Houston, TX         114.0    80.000000  3.777778  Z-Score > 1.5
+2025-05-31     AT&T Spectrum     Dallas-Ft. Worth, TX         114.0    95.333333  2.465263  Z-Score > 1.5
+2025-05-03 Frontier Spectrum          Los Angeles, CA         108.0    78.333333  2.185077  Z-Score > 1.5
+2025-06-07  Comcast     AT&T              Houston, TX         108.0    83.333333  6.103417  Z-Score > 1.5
+2025-05-24  Comcast     AT&T              Atlanta, GA         105.0    86.666667  5.703234  Z-Score > 1.5
+2025-05-24     AT&T Spectrum     Dallas-Ft. Worth, TX         104.0    92.333333  4.635863  Z-Score > 1.5
+2025-04-27     AT&T  Comcast              Houston, TX         103.0    51.000000 10.007405  Z-Score > 1.5
+2025-05-04 Frontier Spectrum Tampa-St. Petersburg, FL         103.0    61.333333  6.560799  Z-Score > 1.5
+2025-06-01     AT&T  Comcast              Houston, TX         103.0    66.333333  3.128841  Z-Score > 1.5
+
+💉 Calculating suppression amounts...
+  Total wins to suppress: 127,999
+
+✂️  Applying suppressions to create gamoshi_win_mover_round2...
+  Created table with 1,149,728 rows
+
+📊 Analyzing gamoshi_win_mover_round2 (after suppression)...
+  🚨 National anomalies (after): 0
+  🚨 H2H anomalies (after): 475
+
+  📈 Improvement:
+     National: 0 anomalies removed (0.0%)
+     H2H: 195 anomalies removed (29.1%)
+
+================================================================================
+ROUND 3
+================================================================================
+
+📊 Analyzing gamoshi_win_mover_round2...
+  National data points: 9878
+  H2H data points: 29808
+  🚨 National anomalies (before): 0
+  🚨 H2H anomalies (before): 477
+
+🔍 Detecting outliers...
+  Found 17897 outliers
+
+  Top 10 outliers by impact:
+  the_date   winner    loser                 dma_name  current_wins  rolling_avg   z_score outlier_reason
+2025-06-07     AT&T  Comcast              Houston, TX         128.0   100.000000 28.000000  Z-Score > 1.5
+2025-05-03     AT&T  Comcast              Houston, TX         114.0    80.000000  3.777778  Z-Score > 1.5
+2025-05-31     AT&T Spectrum     Dallas-Ft. Worth, TX         114.0    95.333333  2.465263  Z-Score > 1.5
+2025-05-03 Frontier Spectrum          Los Angeles, CA         108.0    78.333333  2.185077  Z-Score > 1.5
+2025-06-07  Comcast     AT&T              Houston, TX         108.0    83.333333  6.103417  Z-Score > 1.5
+2025-05-24  Comcast     AT&T              Atlanta, GA         105.0    86.666667  5.703234  Z-Score > 1.5
+2025-05-24     AT&T Spectrum     Dallas-Ft. Worth, TX         104.0    92.333333  4.635863  Z-Score > 1.5
+2025-04-27     AT&T  Comcast              Houston, TX         103.0    51.000000 10.007405  Z-Score > 1.5
+2025-05-04 Frontier Spectrum Tampa-St. Petersburg, FL         103.0    61.333333  6.560799  Z-Score > 1.5
+2025-06-01     AT&T  Comcast              Houston, TX         103.0    66.333333  3.128841  Z-Score > 1.5
+
+💉 Calculating suppression amounts...
+  Total wins to suppress: 128,028
+
+✂️  Applying suppressions to create gamoshi_win_mover_round3...
+  Created table with 1,144,813 rows
+
+📊 Analyzing gamoshi_win_mover_round3 (after suppression)...
+  🚨 National anomalies (after): 0
+  🚨 H2H anomalies (after): 147
+
+  📈 Improvement:
+     National: 0 anomalies removed (0.0%)
+     H2H: 330 anomalies removed (69.2%)
+
+================================================================================
+SUMMARY
+================================================================================
+
+Round 1:
+  Outliers detected: 17881
+  Wins suppressed: 127,780
+  National anomalies: 0 → 0 (0 removed)
+  H2H anomalies: 0 → 670 (-670 removed)
+
+Round 2:
+  Outliers detected: 17896
+  Wins suppressed: 127,999
+  National anomalies: 0 → 0 (0 removed)
+  H2H anomalies: 670 → 475 (195 removed)
+
+Round 3:
+  Outliers detected: 17897
+  Wins suppressed: 128,028
+  National anomalies: 0 → 0 (0 removed)
+  H2H anomalies: 477 → 147 (330 removed)
+
+✅ All results saved to analysis/top50_suppression
+

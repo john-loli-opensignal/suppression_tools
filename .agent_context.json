@@ -1,0 +1,116 @@
+{
+  "project_structure": {
+    "database": {
+      "primary_db": "data/databases/duck_suppression.db",
+      "note": "ALWAYS use this path. Do not create alternate DBs.",
+      "assertion": "Always assert db file exists at data/databases/duck_suppression.db before operations",
+      "getter": "Use tools.db.get_db_path() to get correct path"
+    },
+    "key_directories": {
+      "data": "data/ - Contains databases/ and partitioned parquet files",
+      "data_databases": "data/databases/ - Contains duck_suppression.db ONLY",
+      "tools": "tools/ - Main Python package (formerly suppression_tools/src)",
+      "dashboards": "Root contains carrier_dashboard_duckdb.py, carrier_suppression_dashboard.py",
+      "analysis": "analysis/ - ALL analysis outputs, images, temp scripts go here",
+      "docs": "docs/ - Contains all markdown documentation"
+    },
+    "cube_tables": {
+      "pattern": "{ds}_win_{mover_type}_cube, {ds}_loss_{mover_type}_cube",
+      "datasets": ["gamoshi", "All"],
+      "mover_types": ["mover", "non_mover"],
+      "indexes": ["the_date", "state", "dma_name", "winner", "loser"],
+      "key_columns": [
+        "the_date", "state", "dma_name", "winner", "loser",
+        "total_metric_sum", "record_count", "day_of_week", "dow_name"
+      ]
+    },
+    "rolling_views": {
+      "purpose": "Calculate statistical baselines for outlier detection",
+      "pattern": "{ds}_win_{mover_type}_rolling",
+      "example": "gamoshi_win_mover_rolling",
+      "rolling_windows": {
+        "28_day": "Primary window for statistical baselines",
+        "14_day": "Secondary window",
+        "4_preceding_dow": "Minimum for day-of-week patterns"
+      },
+      "calculated_metrics": [
+        "avg_28d", "stddev_28d", "z_score_28d",
+        "pct_change_28d", "is_first_appearance",
+        "prev_value", "dow_avg", "dow_stddev"
+      ],
+      "outlier_thresholds": {
+        "z_score": 1.5,
+        "pct_change": 0.30,
+        "min_current_value": 10
+      }
+    }
+  },
+  "data_hierarchy": {
+    "granularity_levels": [
+      "National (ds, mover_ind) - Top level shares",
+      "H2H National (ds, mover_ind, winner, loser) - Carrier pair matchups",
+      "State (state, winner, loser) - Geographic patterns",
+      "DMA (dma_name, winner, loser) - Market-level (primary outlier detection)",
+      "Census Block (census_block_id) - Lowest granularity (experimental)"
+    ],
+    "outlier_detection_level": "DMA",
+    "note": "First appearance detection at DMA level, not census block (too many new blocks daily)"
+  },
+  "outlier_types": {
+    "statistical": {
+      "z_score": "28-day rolling z-score > 1.5",
+      "percentage": "30%+ increase from 28-day avg",
+      "min_threshold": "Current value must be >= 10"
+    },
+    "behavioral": {
+      "first_appearance": "DMA level new winner/loser pairs",
+      "rare_pairs": "Infrequent matchups with sudden activity"
+    },
+    "temporal": {
+      "dow_consideration": "Day-of-week patterns (weekends higher volume)",
+      "rolling_context": "Use all historical data, filter display by date range"
+    }
+  },
+  "suppression_strategy": {
+    "approach": "Top-down hierarchical",
+    "steps": [
+      "1. Identify national share outliers (ds, mover_ind level)",
+      "2. Drill to H2H national pairs causing national anomalies",
+      "3. Find DMA-level outliers for those pairs",
+      "4. Remove impact (current - avg) not entire value",
+      "5. Optionally distribute removed volume to maintain totals"
+    ],
+    "key_insight": "We remove IMPACT not entire records. Suppression is surgical.",
+    "validation": "Before/after comparison of national & H2H shares should show reduced anomalies"
+  },
+  "performance_insights": {
+    "cube_queries": "Blazing fast due to pre-aggregation",
+    "rolling_views": "Can be regenerated quickly as parameters change",
+    "census_block_cubes": "~10-20M rows, still fast but experimental for outlier detection",
+    "top_carriers_filter": "Limit analysis to top 50 carriers by total wins to focus on material impact"
+  },
+  "day_of_week": {
+    "duckdb_function": "dayofweek(the_date)",
+    "mapping": "0=Monday, 1=Tuesday, ..., 6=Sunday (ISO standard)",
+    "verified": "2025-08-03 is Sunday (dow=6)",
+    "importance": "Critical for rolling averages - weekend volume differs from weekdays"
+  },
+  "workflow": {
+    "branch": "codex-agent (always work here)",
+    "commits": "Small, focused, conventional format",
+    "testing": "Always validate changes with actual queries before committing",
+    "cleanup": "Remove temp files, organize docs/ folder, keep root clean"
+  },
+  "common_pitfalls": {
+    "multiple_dbs": "NEVER create alternate database paths. Always use data/duck_suppression.db",
+    "empty_results": "Always check if view/table exists before querying",
+    "scale": "Consider top N carriers filter for large-scale analysis",
+    "validation": "Always show before/after when claiming success"
+  },
+  "key_scripts": {
+    "build_cubes_in_db.py": "Creates cube tables from partitioned parquet",
+    "partition_pre_agg_to_duckdb.py": "Loads raw data into DuckDB partitioned",
+    "carrier_dashboard_duckdb.py": "Main dashboard using DuckDB cubes",
+    "carrier_suppression_dashboard.py": "Historical suppression approach (study for patterns)"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "python_version": "3.12",
+  "env": {
+    "engine": "duckdb",
+    "streaming": false,
+    "latency_s": 5,
+    "memory_gb": 16
+  },
+  "data_profile": {
+    "series_count": 174953,
+    "cadence": "daily",
+    "window_days": 198,
+    "median_history_days": 70,
+    "missing_pct": 0.0,
+    "imputation": "none",
+    "scaling": "zscore"
+  },
+  "structure": {
+    "seasonality": [
+      {
+        "period_days": 7,
+        "strength_0to1": 0.339
+      }
+    ],
+    "trend_strength_0to1": 0.1,
+    "acf_half_life_days": 7,
+    "cp_density_per_100d": 1.5,
+    "vol_clustering_pvalue": 0.05
+  },
+  "anomaly_shape": {
+    "point_rate_per_100d": 59.25,
+    "collective_runs_per_100d": 8.0,
+    "median_run_length_days": 2,
+    "median_amp_over_IQR": 2.15
+  },
+  "multivariate": {
+    "feature_dims": 4,
+    "median_pairwise_corr": 0.15,
+    "cross_series_corr": 0.25
+  },
+  "labels_eval": {
+    "has_labels": true,
+    "monthly_expected_anomalies": 450,
+    "fp_cost": "med",
+    "fn_cost": "high"
+  }
+}

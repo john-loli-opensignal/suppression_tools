@@ -1,0 +1,38 @@
+{
+  "rounds": [
+    {
+      "round": 1,
+      "outliers_detected": 17881,
+      "total_suppressed": 127780.33333333333,
+      "national_anomalies_before": 0,
+      "national_anomalies_after": 0,
+      "h2h_anomalies_before": 0,
+      "h2h_anomalies_after": 670,
+      "national_improvement": 0,
+      "h2h_improvement": -670
+    },
+    {
+      "round": 2,
+      "outliers_detected": 17896,
+      "total_suppressed": 127999.33333333334,
+      "national_anomalies_before": 0,
+      "national_anomalies_after": 0,
+      "h2h_anomalies_before": 670,
+      "h2h_anomalies_after": 475,
+      "national_improvement": 0,
+      "h2h_improvement": 195
+    },
+    {
+      "round": 3,
+      "outliers_detected": 17897,
+      "total_suppressed": 128027.66666666666,
+      "national_anomalies_before": 0,
+      "national_anomalies_after": 0,
+      "h2h_anomalies_before": 477,
+      "h2h_anomalies_after": 147,
+      "national_improvement": 0,
+      "h2h_improvement": 330
+    }
+  ],
+  "timestamp": "2025-10-04T20:04:10.799365"
+}

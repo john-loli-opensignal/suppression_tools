@@ -13,6 +13,7 @@
     }
   },
   "database_schema": {
+    "CRITICAL_PATH_ASSERTION": "ALWAYS use 'data/databases/duck_suppression.db' - NO OTHER PATHS",
     "raw_tables": {
       "gamoshi_preagg": "Partitioned raw data loaded from parquet",
       "note": "Format: {ds}_preagg with partitions by the_date"
@@ -80,7 +81,7 @@
     "old_approach": "Used CSV cubes with same logic - worked well"
   },
   "key_learnings": {
-    "database_paths": "ONLY use data/duck_suppression.db - add assertion checks",
+    "database_paths": "ONLY use data/databases/duck_suppression.db - ASSERT this path exists before ANY query",
     "dow_mapping": "DuckDB dayofweek(date) returns 0-6 where 0=Monday, 6=Sunday",
     "first_appearance_noise": "Census block level too noisy (new blocks every day)",
     "weekend_volume": "Saturday/Sunday have significantly higher volume than weekdays",
@@ -91,14 +92,29 @@
     "gamoshi": {
       "date_range": "2025-02-19 to 2025-09-04",
       "focus_dates": ["2025-06-19", "2025-08-15", "2025-08-16", "2025-08-17", "2025-08-18"],
-      "carriers": ["AT&T", "T-Mobile", "Verizon", "Dish", "UScellular", "etc"],
-      "status": "Primary dataset for POC and testing"
+      "carriers": ["AT&T", "T-Mobile", "Verizon", "Dish", "UScellular", "Consolidated", "Ezee Fiber", "etc"],
+      "status": "Primary dataset for POC and testing",
+      "notable_patterns": {
+        "ezee_fiber_houston": {
+          "market": "Houston, TX",
+          "competitor": "Consolidated",
+          "trend": "Ezee Fiber's share of Consolidated losses increased 614% (3.5% → 25%)",
+          "period": "April-September 2025",
+          "peak": "July 2025 - 13 losses (6.04% share)"
+        }
+      }
     }
   },
   "commands": {
     "build_cubes": "uv run build_cubes_in_db.py --all",
     "create_views": "Direct SQL via db.py query() method",
     "run_dashboard": "uv run streamlit run carrier_dashboard_duckdb.py",
-    "query_db": "Use suppression_tools.db.query(sql, db_path) helper"
+    "query_db": "Use tools.db.query(sql, db_path='data/databases/duck_suppression.db')"
+  },
+  "common_queries": {
+    "competitive_loss_share": "Query gamoshi_loss_mover_cube WHERE loser = target_carrier",
+    "market_growth": "Track winner/loser pairs by dma_name over time",
+    "carrier_names": "Use ILIKE for fuzzy matching (e.g., 'Ezee Fiber', 'Consolidated')",
+    "houston_dma": "Houston, TX (also exists: Columbus-Tupelo-West Point-Houston, MS)"
   }
 }
