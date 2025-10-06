@@ -467,7 +467,7 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
 
 
 @st.cache_data
-def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str, display_mode: str = "share") -> pd.DataFrame:
+def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str, display_mode: str = "share", outlier_direction: str = "all") -> pd.DataFrame:
     """Compute competitor PDF with outliers using database"""
     if not competitors:
         return pd.DataFrame(columns=["the_date", "competitor", metric])
@@ -788,6 +788,8 @@ def main():
                 st.session_state.competitor_carrier = [c for c in ranked_filtered[1:10] if c != st.session_state.primary_carrier]
         # compute data now and store snapshot
         if st.session_state.analysis_mode == "Competitor":
+            # Map outlier_show to outlier_direction
+            outlier_dir = "all" if st.session_state.outlier_show == "All" else "positive"
             pdf = compute_competitor_pdf(
                 db_path,
                 st.session_state.filters,
@@ -799,6 +801,7 @@ def main():
                 str(st.session_state.graph_start),
                 str(st.session_state.graph_end),
                 display_mode=st.session_state.display_mode,
+                outlier_direction=outlier_dir,
             )
         else:
             if st.session_state.selection_mode == "Top N Carriers":
