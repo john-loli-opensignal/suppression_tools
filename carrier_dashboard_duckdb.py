@@ -472,14 +472,6 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
     if not competitors:
         return pd.DataFrame(columns=["the_date", "competitor", metric])
     
-    # Map volume metrics to database column names for outlier detection
-    db_metric = metric
-    if display_mode == "volume":
-        if metric == "wins":
-            db_metric = "win_share"
-        elif metric == "losses":
-            db_metric = "loss_share"
-    
     _ds = filters.get('ds', 'gamoshi')
     _mover_ind = (filters.get('mover_ind', 'False') == 'True')
     _state = filters.get('state') if filters else None
@@ -515,7 +507,22 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
         base['wins'] = base['h2h_wins']
         base['losses'] = base['h2h_losses']
     
-    # Compute outliers inline (day-type grouped z-score) - always use share-based for detection
+    # Determine which metric to use for outlier z-score calculation
+    # In volume mode, use actual counts; in share mode, use shares
+    if display_mode == "volume":
+        if metric == "wins":
+            zscore_metric = 'h2h_wins'  # Use raw counts for z-score
+        elif metric == "losses":
+            zscore_metric = 'h2h_losses'  # Use raw counts for z-score
+        elif metric == "wins_per_loss":
+            zscore_metric = 'wins_per_loss'  # Use ratio for z-score
+        else:
+            zscore_metric = metric
+    else:
+        # Share mode: use the metric directly (win_share, loss_share, wins_per_loss)
+        zscore_metric = metric
+    
+    # Compute outliers inline (day-type grouped z-score)
     def _z_for_group(g):
         g = g.sort_values('the_date')
         g['day_type'] = g['the_date'].apply(lambda d: 'Sat' if pd.Timestamp(d).weekday() == 5
@@ -526,7 +533,7 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
         
         for dt in g['day_type'].unique():
             mask = g['day_type'] == dt
-            vals = g.loc[mask, db_metric]  # Use share-based metric for outlier detection
+            vals = g.loc[mask, zscore_metric]  # Use appropriate metric for outlier detection
             if len(vals) > 1:
                 mu = vals.shift(1).rolling(window, min_periods=1).mean()
                 sigma = vals.shift(1).rolling(window, min_periods=1).std()
