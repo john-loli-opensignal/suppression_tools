@@ -462,4 +462,65 @@
       }
     }
   ]
+}  ,
+  "common_debugging_scenarios": {
+    "carrier_not_suppressed": {
+      "example": "Windstream outliers detected but not suppressed",
+      "investigation_steps": [
+        "1. Check scan_base_outliers() output - Are outliers detected?",
+        "2. Check National Outliers Summary table in UI - What's the total impact?",
+        "3. Check 'Carriers Not Meeting Threshold' table - Is carrier listed?",
+        "4. Check distribution_min_wins parameter - Too high for small carriers?",
+        "5. Verify build_enriched_cube() returns data for outlier dates"
+      ],
+      "root_causes": {
+        "insufficient_eligible_pairs": {
+          "description": "Carrier has many small pairs (< min_wins threshold)",
+          "example": "Windstream 2025-07-26: 187 wins but only 2 pairs with 5+ wins",
+          "solution": "Lower distributed_min_wins from 5 to 1-2 for small carriers",
+          "tiered_approach": "Top 10: 5+ wins, 11-25: 2+ wins, 26+: any wins"
+        },
+        "not_enough_history": {
+          "description": "Early dates don't have 4+ preceding DOW periods",
+          "example": "2025-06-01 to 2025-06-10 missing history",
+          "solution": "Expected behavior - data starts 2025-02-19, need ~28 days warmup"
+        },
+        "wrong_aggregation": {
+          "description": "Using pair-level averages instead of national totals",
+          "example": "AVG(avg_wins) from rolling view = 0.8 (wrong!)",
+          "correct": "SUM(total_wins) aggregated nationally = 53.25",
+          "note": "scan_base_outliers() does this correctly"
+        }
+      }
+    },
+    "outlier_count_discrepancy": {
+      "issue": "Rolling view shows 35 outliers, scan shows 11",
+      "explanation": [
+        "Rolling view uses PAIR-LEVEL thresholds (per DMA pair)",
+        "scan_base_outliers uses NATIONAL aggregation",
+        "Different calculation methods = different results",
+        "scan_base_outliers is correct for national-level suppression"
+      ]
+    }
+  },
+  "ui_features": {
+    "main_py": {
+      "national_outliers_table": {
+        "location": "After 'Scan for Outliers' button",
+        "purpose": "Show which carriers have outliers and total impact",
+        "columns": ["Carrier", "Outlier Days", "Total Impact", "Avg Impact", "Max Impact", "Total Wins", "Avg |Z-Score|"]
+      },
+      "insufficient_threshold_table": {
+        "location": "After 'Build Plan' button",
+        "purpose": "Show carriers that couldn't fully distribute",
+        "shows": "Unaddressed impact when pairs don't meet min_wins threshold",
+        "actionable": "Suggests lowering threshold"
+      },
+      "suppression_summary": {
+        "location": "Preview section",
+        "columns": ["Winner", "Base Wins", "Removed", "Wins after Suppression", "Old %", "Removed %", "New %"],
+        "purpose": "Validate suppression effectiveness"
+      }
+    }
+  }
 }
