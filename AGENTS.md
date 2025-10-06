@@ -88,22 +88,46 @@ The project supports two versions of pre-aggregated data with different census b
 | Census vintage | 2010 | 2020 |
 | Blockid column | `census_blockid` | `primary_geoid` |
 | Crosswalk join key | `serv_terr_blockid` | `census_blockid` |
+| Date format | BYTE_ARRAY ('YYYY-MM-DD') | INT32 |
+| Has `ds` column | ✅ Yes (or extract from path) | ✅ Yes |
 | Partitioning columns | Derive from `the_date` | Has `year`, `month`, `day` |
-| Has `ds` column | ✅ Yes | ✅ Yes |
 
 ### Database Build Process
+**The build script auto-detects version!** No manual configuration needed.
+
+```bash
+# Detect version only (no build)
+uv run python scripts/build/build_suppression_db.py <path> --detect-only
+
+# Build v15.0 database (auto-detected)
+uv run python scripts/build/build_suppression_db.py \
+    ~/tmp/platform_pre_agg_v_15_0/2025-09-26/{uuid} \
+    -o data/databases/duck_suppression.db
+
+# Build v0.3 database (auto-detected)
+uv run python scripts/build/build_suppression_db.py \
+    ~/tmp/platform_pre_aggregate_v_0_3/gamoshi/2025-10-06/{uuid} \
+    --geo ref/d_census_block_crosswalk \
+    -o data/databases/duck_suppression_v03.db
+```
+
+**Build Process Steps:**
 1. Auto-detect version from schema (inspect columns)
-2. Use version-specific crosswalk and join keys
-3. Normalize into common `carrier_data` schema
-4. Build version-specific database (e.g., `duck_suppression_v03.db`)
+2. Extract `ds` from path if missing (v0.3 fallback)
+3. Use version-specific crosswalk and join keys
+4. Normalize into common `carrier_data` schema
+5. Build version-specific database (e.g., `duck_suppression_v03.db`)
+6. Save build config JSON for reproducibility
 
 ### Important Notes
 - Cube builders, dashboards, and analysis tools are version-agnostic
 - They operate on normalized `carrier_data` table
 - Can't directly compare v0.3 and v15.0 at census block level (different geographies)
 - Aggregate to DMA level for cross-version comparisons
+- Each build creates a `*_build_config.json` with metadata
 
 ### Related Documentation
+- `analysis/preagg_v03_support/IMPLEMENTATION_PHASE1.md` - Implementation details
 - `analysis/preagg_v03_support/MIGRATION_PLAN.md` - Full technical details
 - `analysis/preagg_v03_support/QUICK_SUMMARY.md` - Executive summary
 

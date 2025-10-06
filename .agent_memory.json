@@ -78,38 +78,44 @@
     }
   },
   "preagg_version_support": {
-    "v0.3": {
-      "name": "v2.1 Production",
-      "census_vintage": 2010,
-      "path_pattern": "~/tmp/platform_pre_aggregate_v_0_3/{ds}/{date}/{uuid}/",
-      "database_file": "data/databases/duck_suppression_v_2_1_prod.db",
-      "crosswalk": "ref/d_census_block_crosswalk/5bb9481d-6e03-4802-a965-8a5242e74d65/",
-      "blockid_col": "census_blockid",
-      "crosswalk_join_key": "serv_terr_blockid",
-      "has_ds_column": true,
-      "has_partitioning_cols": false,
-      "total_columns": 21,
-      "notes": "2010 census blocks, may need ds inference if column missing"
-    },
-    "v15.0": {
-      "name": "Current Production",
-      "census_vintage": 2020,
+    "v15_0": {
+      "census_vintage": "2020",
       "path_pattern": "~/tmp/platform_pre_agg_v_15_0/{date}/{uuid}/",
-      "database_file": "data/databases/duck_suppression.db",
-      "crosswalk": "ref/cb_cw_2020/90226c5d-f3bf-47eb-963a-e03545c972bd/",
       "blockid_col": "primary_geoid",
+      "crosswalk": "ref/cb_cw_2020",
       "crosswalk_join_key": "census_blockid",
+      "date_format": "INT32",
       "has_ds_column": true,
-      "has_partitioning_cols": true,
-      "total_columns": 35,
-      "notes": "2020 census blocks, current default"
+      "column_count": 35,
+      "default_db": "data/databases/duck_suppression.db"
     },
-    "cross_version_notes": {
-      "safe_comparisons": ["DMA level", "State level", "National level", "Carrier metrics"],
-      "unsafe_comparisons": ["Census block level (different geographies)"],
-      "cube_compatibility": "Cubes work with both versions (normalized schema)",
-      "dashboard_compatibility": "Dashboards work with both (just change DB path)"
-    }
+    "v0_3": {
+      "census_vintage": "2010",
+      "path_pattern": "~/tmp/platform_pre_aggregate_v_0_3/{ds}/{date}/{uuid}/",
+      "blockid_col": "census_blockid",
+      "crosswalk": "ref/d_census_block_crosswalk",
+      "crosswalk_join_key": "serv_terr_blockid",
+      "date_format": "BYTE_ARRAY",
+      "has_ds_column": "sometimes (extract from path if missing)",
+      "column_count": 21,
+      "default_db": "data/databases/duck_suppression_v03.db"
+    },
+    "build_script": {
+      "path": "scripts/build/build_suppression_db.py",
+      "auto_detects_version": true,
+      "detect_only_flag": "--detect-only",
+      "example_v15": "uv run python scripts/build/build_suppression_db.py ~/tmp/platform_pre_agg_v_15_0/2025-09-26/{uuid}",
+      "example_v03": "uv run python scripts/build/build_suppression_db.py ~/tmp/platform_pre_aggregate_v_0_3/gamoshi/2025-10-06/{uuid} --geo ref/d_census_block_crosswalk -o data/databases/duck_suppression_v03.db",
+      "saves_build_config": true,
+      "config_pattern": "*_build_config.json"
+    },
+    "key_differences": [
+      "v0.3 uses 2010 census blocks, v15.0 uses 2020 census blocks",
+      "Cannot directly compare at census block level (different geographies)",
+      "Aggregate to DMA level for cross-version comparisons",
+      "Both normalize to same carrier_data table schema",
+      "Cube builders and dashboards work with both versions"
+    ]
   },
   "outlier_detection": {
     "two_different_algorithms": {
@@ -125,7 +131,7 @@
       "main_py_suppression_tool": {
         "function": "scan_base_outliers()",
         "day_grouping": "7 types (DOW 1-7 for each day of week)",
-        "window_strategy": "Tiered: tries 28d → 14d → 4d based on data availability",
+        "window_strategy": "Tiered: tries 28d \u2192 14d \u2192 4d based on data availability",
         "rolling_scope": "Entire time series, then filter to graph window",
         "carrier_scope": "Top N carriers + egregious outliers (impact > threshold)",
         "additional_filters": "Optional minimum share % threshold",
@@ -179,7 +185,7 @@
         "description": "Tries longest window first, falls back to shorter if insufficient data"
       },
       "dow_definition": "1=Sunday, 2=Monday, ..., 7=Saturday (DuckDB DAYOFWEEK())",
-      "verified": "Aug 3, 2025 is Sunday (dow=1) ✅"
+      "verified": "Aug 3, 2025 is Sunday (dow=1) \u2705"
     }
   }
 }

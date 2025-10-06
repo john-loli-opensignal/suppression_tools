@@ -1,0 +1,29 @@
+{
+  "version": "v0.3",
+  "build_date": "2025-10-06T18:14:12.615037Z",
+  "source_path": "/home/jloli/tmp/platform_pre_aggregate_v_0_3/gamoshi/2025-10-06/063c37f4-d6ba-4d7c-8a9c-4a0d67ed8689",
+  "rules_path": "/home/jloli/codebase-comparison/suppression_tools/ref/display_rules",
+  "crosswalk_path": "ref/d_census_block_crosswalk",
+  "output_db": "data/databases/duck_suppression_v03.db",
+  "row_count": 5025778,
+  "date_range": [
+    "2025-03-01",
+    "2025-09-15"
+  ],
+  "datasets": 1,
+  "winners": 629,
+  "losers": 629,
+  "dmas": 211,
+  "states": 51,
+  "version_info": {
+    "version": "v0.3",
+    "blockid_col": "census_blockid",
+    "has_ds_column": true,
+    "ds_from_path": "gamoshi",
+    "crosswalk_join_key": "serv_terr_blockid",
+    "recommended_crosswalk": "ref/d_census_block_crosswalk",
+    "date_type": "BYTE_ARRAY",
+    "column_count": 21
+  },
+  "command": "scripts/build/build_suppression_db.py /home/jloli/tmp/platform_pre_aggregate_v_0_3/gamoshi/2025-10-06/063c37f4-d6ba-4d7c-8a9c-4a0d67ed8689 --geo ref/d_census_block_crosswalk -o data/databases/duck_suppression_v03.db"
+}
