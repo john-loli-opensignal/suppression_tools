@@ -349,40 +349,33 @@ def ui():
     if base_outliers is not None and not base_outliers.empty:
         st.info(f'📌 {len(base_outliers)} outliers detected for {len(base_outliers["winner"].unique())} carriers')
         
-        # National Outliers Summary Table
-        with st.expander('📋 National Outliers Summary', expanded=True):
-            summary = base_outliers.groupby('winner').agg({
-                'the_date': 'count',
-                'impact': ['sum', 'mean', 'max'],
-                'nat_total_wins': 'sum',
-                'nat_z_score': lambda x: f"{x.abs().mean():.2f}"
-            }).reset_index()
-            
-            summary.columns = ['Carrier', 'Outlier Days', 'Total Impact', 'Avg Impact', 'Max Impact', 'Total Wins', 'Avg |Z-Score|']
-            summary = summary.sort_values('Total Impact', ascending=False)
+        # National Outliers Summary Table - with dates
+        with st.expander('📋 National Outliers Summary (by Date)', expanded=True):
+            # Detailed view with dates
+            detailed = base_outliers[['the_date', 'winner', 'impact', 'nat_total_wins', 'nat_z_score']].copy()
+            detailed['the_date'] = pd.to_datetime(detailed['the_date']).dt.date
+            detailed = detailed.sort_values(['the_date', 'impact'], ascending=[True, False])
             
             # Format for display
-            summary['Total Impact'] = summary['Total Impact'].astype(int)
-            summary['Avg Impact'] = summary['Avg Impact'].round(1)
-            summary['Max Impact'] = summary['Max Impact'].astype(int)
-            summary['Total Wins'] = summary['Total Wins'].astype(int)
+            detailed['impact'] = detailed['impact'].astype(int)
+            detailed['nat_total_wins'] = detailed['nat_total_wins'].astype(int)
+            detailed['nat_z_score'] = detailed['nat_z_score'].round(2)
+            detailed.columns = ['Date', 'Carrier', 'Impact', 'Total Wins', 'Z-Score']
             
             st.dataframe(
-                summary,
+                detailed,
                 use_container_width=True,
                 hide_index=True,
                 column_config={
+                    'Date': st.column_config.DateColumn('Date', width='small'),
                     'Carrier': st.column_config.TextColumn('Carrier', width='medium'),
-                    'Outlier Days': st.column_config.NumberColumn('Outlier Days', format='%d'),
-                    'Total Impact': st.column_config.NumberColumn('Total Impact', format='%d', help='Sum of excess wins'),
-                    'Avg Impact': st.column_config.NumberColumn('Avg Impact', format='%.1f'),
-                    'Max Impact': st.column_config.NumberColumn('Max Impact', format='%d'),
+                    'Impact': st.column_config.NumberColumn('Impact', format='%d', help='Excess wins over baseline'),
                     'Total Wins': st.column_config.NumberColumn('Total Wins', format='%d'),
-                    'Avg |Z-Score|': st.column_config.TextColumn('Avg |Z-Score|', width='small')
+                    'Z-Score': st.column_config.NumberColumn('Z-Score', format='%.2f')
                 }
             )
             
-            st.caption(f'Showing all {len(summary)} carriers with detected outliers. Click "Build Plan" to generate suppression strategy.')
+            st.caption(f'Showing all {len(base_outliers)} outlier instances. Click "Build Plan" to generate suppression strategy.')
     else:
         st.caption('No outliers scanned yet. Click "Scan for Outliers" to begin.')
 
@@ -494,19 +487,19 @@ def ui():
                                 need_remaining = max(0, need - auto_removed)
                                 
                                 if need_remaining > 0:
-                                    # FIXED: Distribute proportionally across DMAs, not pairs
-                                    # This ensures better coverage and avoids missing suppressions
+                                    # Get all pairs NOT already in auto suppression
+                                    auto_pairs = set()
+                                    if not auto_final.empty:
+                                        for _, r in auto_final.iterrows():
+                                            auto_pairs.add((r['loser'], r['dma_name']))
                                     
-                                    # Step 1: Aggregate to DMA level
-                                    dma_level = sub.groupby('dma_name').agg({
-                                        'pair_wins_current': 'sum'
-                                    }).reset_index()
-                                    dma_level.columns = ['dma_name', 'dma_wins']
+                                    # Filter to pairs meeting distributed minimum threshold
+                                    eligible_pairs = sub[
+                                        (~sub.apply(lambda r: (r['loser'], r['dma_name']) in auto_pairs, axis=1)) &
+                                        (sub['pair_wins_current'] >= distributed_min_wins)
+                                    ].copy()
                                     
-                                    # Filter DMAs meeting minimum threshold
-                                    eligible_dmas = dma_level[dma_level['dma_wins'] >= distributed_min_wins]
-                                    
-                                    if len(eligible_dmas) == 0:
+                                    if len(eligible_pairs) == 0:
                                         # Track this case for reporting
                                         insufficient_threshold_cases.append({
                                             'date': pd.to_datetime(the_date).date(),
@@ -514,37 +507,20 @@ def ui():
                                             'need_remaining': need_remaining,
                                             'auto_removed': auto_removed,
                                             'min_wins_required': distributed_min_wins,
-                                            'reason': f'All DMAs have < {distributed_min_wins} wins'
+                                            'reason': f'All remaining pairs have < {distributed_min_wins} wins'
                                         })
                                         distributed_final = pd.DataFrame()
                                     else:
-                                        # Step 2: Calculate proportional distribution across eligible DMAs
-                                        total_eligible = eligible_dmas['dma_wins'].sum()
-                                        eligible_dmas['proportion'] = eligible_dmas['dma_wins'] / total_eligible
-                                        eligible_dmas['dma_remove'] = (eligible_dmas['proportion'] * need_remaining).round().astype(int)
+                                        # Distribute proportionally across eligible pairs
+                                        eligible_pairs['capacity'] = pd.to_numeric(eligible_pairs['pair_wins_current'], errors='coerce').fillna(0.0)
+                                        total_eligible = eligible_pairs['capacity'].sum()
                                         
-                                        # Step 3: Distribute DMA-level suppressions to pairs proportionally within each DMA
-                                        all_pairs = []
-                                        for _, dma_row in eligible_dmas[eligible_dmas['dma_remove'] > 0].iterrows():
-                                            dma_name = dma_row['dma_name']
-                                            dma_remove = dma_row['dma_remove']
+                                        if total_eligible > 0:
+                                            eligible_pairs['proportion'] = eligible_pairs['capacity'] / total_eligible
+                                            eligible_pairs['rm_final'] = (eligible_pairs['proportion'] * need_remaining).round().astype(int)
                                             
-                                            # Get pairs for this DMA
-                                            dma_pairs = sub[sub['dma_name'] == dma_name][['loser', 'dma_name', 'pair_wins_current']].copy()
-                                            dma_pairs['capacity'] = pd.to_numeric(dma_pairs['pair_wins_current'], errors='coerce').fillna(0.0)
-                                            
-                                            # Distribute proportionally within DMA
-                                            dma_total = dma_pairs['capacity'].sum()
-                                            if dma_total > 0:
-                                                dma_pairs['proportion'] = dma_pairs['capacity'] / dma_total
-                                                dma_pairs['rm_final'] = (dma_pairs['proportion'] * dma_remove).round().astype(int)
-                                                
-                                                # Add to collection
-                                                all_pairs.append(dma_pairs[dma_pairs['rm_final'] > 0])
-                                        
-                                        # Combine all pairs
-                                        if all_pairs:
-                                            distributed_final = pd.concat(all_pairs, ignore_index=True)
+                                            # Only keep pairs with actual removals
+                                            distributed_final = eligible_pairs[eligible_pairs['rm_final'] > 0].copy()
                                         else:
                                             distributed_final = pd.DataFrame()
                                 else:
@@ -585,39 +561,35 @@ def ui():
                                 
                                 # Distributed stage rows
                                 for _, r in distributed_final.iterrows():
-                                    # Find pair details from sub
-                                    pair_info = sub[(sub['loser'] == r['loser']) & (sub['dma_name'] == r['dma_name'])]
-                                    if not pair_info.empty:
-                                        p = pair_info.iloc[0]
-                                        dma_total = dma_totals.get(r['dma_name'], 0)
-                                        dma_mu_total = dma_mu_totals.get(r['dma_name'], 0)
-                                        
-                                        pair_share = (p['pair_wins_current'] / dma_total) if dma_total > 0 else None
-                                        pair_share_mu = (p['pair_mu_wins'] / dma_mu_total) if dma_mu_total > 0 else None
-                                        
-                                        plan_rows.append({
-                                            'date': pd.to_datetime(the_date).date(),
-                                            'winner': winner,
-                                            'loser': r['loser'],
-                                            'dma_name': r['dma_name'],
-                                            'state': p['state'],
-                                            'mover_ind': mover_ind,
-                                            'remove_units': int(r['rm_final']),
-                                            'stage': 'distributed',
-                                            'pair_wins_current': p['pair_wins_current'],
-                                            'pair_mu_wins': p['pair_mu_wins'],
-                                            'pair_sigma_wins': p['pair_sigma_wins'],
-                                            'pair_z': p['pair_z'],
-                                            'pair_pct_change': p['pair_pct_change'],
-                                            'dma_wins': dma_total,
-                                            'pair_share': pair_share,
-                                            'pair_share_mu': pair_share_mu,
-                                            'nat_total_wins': nat_info['nat_total_wins'],
-                                            'nat_share_current': nat_info['nat_share_current'],
-                                            'nat_mu_share': nat_info['nat_mu_share'],
-                                            'nat_z_score': nat_info['nat_z_score'],
-                                            'impact': int(r['rm_final'])
-                                        })
+                                    dma_total = dma_totals.get(r['dma_name'], 0)
+                                    dma_mu_total = dma_mu_totals.get(r['dma_name'], 0)
+                                    
+                                    pair_share = (r['pair_wins_current'] / dma_total) if dma_total > 0 else None
+                                    pair_share_mu = (r['pair_mu_wins'] / dma_mu_total) if dma_mu_total > 0 else None
+                                    
+                                    plan_rows.append({
+                                        'date': pd.to_datetime(the_date).date(),
+                                        'winner': winner,
+                                        'loser': r['loser'],
+                                        'dma_name': r['dma_name'],
+                                        'state': r['state'],
+                                        'mover_ind': mover_ind,
+                                        'remove_units': int(r['rm_final']),
+                                        'stage': 'distributed',
+                                        'pair_wins_current': r['pair_wins_current'],
+                                        'pair_mu_wins': r['pair_mu_wins'],
+                                        'pair_sigma_wins': r['pair_sigma_wins'],
+                                        'pair_z': r['pair_z'],
+                                        'pair_pct_change': r['pair_pct_change'],
+                                        'dma_wins': dma_total,
+                                        'pair_share': pair_share,
+                                        'pair_share_mu': pair_share_mu,
+                                        'nat_total_wins': nat_info['nat_total_wins'],
+                                        'nat_share_current': nat_info['nat_share_current'],
+                                        'nat_mu_share': nat_info['nat_mu_share'],
+                                        'nat_z_score': nat_info['nat_z_score'],
+                                        'impact': int(r['rm_final'])
+                                    })
                             
                             if plan_rows:
                                 plan_df = pd.DataFrame(plan_rows)
@@ -774,13 +746,20 @@ def ui():
         else:
             try:
                 with st.spinner('Generating before/after comparison...'):
-                    winners = sorted(plan_df['winner'].unique().tolist())
+                    # Get ALL top N carriers (not just those in plan)
+                    all_top_carriers = get_top_n_carriers(
+                        ds=ds, 
+                        mover_ind=mover_ind, 
+                        n=top_n, 
+                        min_share_pct=min_share_pct, 
+                        db_path=db_path
+                    )
                     
-                    # Get base national series
+                    # Get base national series for ALL top carriers
                     base_series = base_national_series(
                         ds=ds,
                         mover_ind=mover_ind,
-                        winners=winners,
+                        winners=all_top_carriers,
                         start_date=str(view_start),
                         end_date=str(view_end),
                         db_path=db_path
@@ -794,14 +773,14 @@ def ui():
                         suppressions = plan_df.groupby(['date', 'winner', 'loser', 'dma_name'])['remove_units'].sum().reset_index()
                         suppressions['date'] = pd.to_datetime(suppressions['date'])
                         
-                        # Get detailed pair-level data from cube
+                        # Get detailed pair-level data from cube for ALL top carriers
                         cube_table = f"{ds}_win_{'mover' if mover_ind else 'non_mover'}_cube"
                         
                         import duckdb
                         con = duckdb.connect(db_path)
                         
-                        # Query cube data for winners in plan
-                        winners_str = ','.join([f"'{w}'" for w in winners])
+                        # Query cube data for ALL top carriers
+                        winners_str = ','.join([f"'{w}'" for w in all_top_carriers])
                         pair_data = con.execute(f"""
                             SELECT 
                                 the_date,
