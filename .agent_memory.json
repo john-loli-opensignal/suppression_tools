@@ -1,525 +1,58 @@
 {
-  "project_structure": {
-    "database": {
-      "path": "data/databases/duck_suppression.db",
-      "note": "SINGLE DATABASE ONLY - Assert this path in every connection",
-      "assert_check": "assert db_path.endswith('data/databases/duck_suppression.db')"
-    },
-    "key_directories": {
-      "tools": "tools/src/ - Main library code (metrics, outliers, plan, suppress)",
-      "data": "data/ - Database and raw data",
-      "analysis": "analysis/ - ALL analysis outputs, temp files, reports",
-      "scripts": "scripts/ - Executable scripts (build, analysis)",
-      "suppressions": "suppressions/rounds/ - Suppression plan CSVs"
-    }
-  },
-  "database_schema": {
-    "CRITICAL_PATH": "data/databases/duck_suppression.db",
-    "raw_tables": {
-      "pattern": "{ds}_preagg with partitions by the_date"
-    },
-    "cube_tables": {
-      "pattern": "{ds}_{win|loss}_{mover|non_mover}_cube",
-      "level": "Aggregated at date, state, dma_name, winner, loser",
-      "indexes": [
-        "date",
-        "state",
-        "dma",
-        "winner",
-        "loser"
-      ],
-      "performance": "Sub-second queries on 6-10GB datasets"
-    },
-    "census_cube_tables": {
-      "pattern": "{ds}_{win|loss}_{mover|non_mover}_census_cube",
-      "level": "Aggregated at date, state, dma_name, winner, loser, census_block_id",
-      "use_case": "Surgical precision suppression"
-    },
-    "rolling_views": {
-      "pattern": "{ds}_win_{mover|non_mover}_rolling",
-      "columns": [
-        "the_date",
-        "day_of_week",
-        "winner",
-        "loser",
-        "dma",
-        "dma_name",
-        "state",
-        "total_wins",
-        "record_count",
-        "avg_wins",
-        "stddev_wins",
-        "n_periods",
-        "selected_window",
-        "zscore",
-        "pct_change",
-        "is_first_appearance",
-        "is_outlier",
-        "appearance_rank"
-      ],
-      "note": "DOW-aware rolling metrics with TIERED windows (28d preferred, fall back to 14d, then 4d)",
-      "dow_mapping": "DuckDB: 0=Monday...6=Sunday (use DAYOFWEEK() for 1=Sunday...7=Saturday)",
-      "tiered_logic": {
-        "weekday": "Requires 4+ periods minimum (28d, 14d, or 4d)",
-        "weekend": "Requires 2+ periods minimum (more lenient due to fewer samples)",
-        "selected_window": "Column shows which tier was used (28, 14, 4, or NULL)"
-      }
-    },
-    "enriched_views": {
-      "pattern": "{ds}_win_{mover|non_mover}_enriched",
-      "purpose": "Combines pair-level + national-level metrics for UI",
-      "columns": [
-        "All from rolling view",
-        "nat_total_wins",
-        "nat_market_wins",
-        "nat_share_current",
-        "nat_mu_share",
-        "nat_sigma_share",
-        "nat_z_score"
-      ],
-      "note": "Created on-demand for main.py, filtered to graph window"
-    },
-    "suppression_tables": {
-      "schema": "suppressions",
-      "metadata": "suppressions.rounds - Round metadata",
-      "plans": "suppressions.{round_name} - Suppression plan records",
-      "backup": "Also save to suppressions/rounds/{round_name}.csv"
-    }
-  },
-  "outlier_detection": {
-    "hierarchical_levels": [
-      "national (ds, mover_ind) - Top level shares",
-      "h2h_national (winner, loser) - Pair analysis",
-      "state (state, ds, mover_ind) - Geographic patterns",
-      "dma (dma_name, winner, loser) - Actionable level",
-      "census_block (cb_id, dma, winner, loser) - Surgical precision"
-    ],
-    "methods": {
-      "zscore": {
-        "national": 2.5,
-        "dma_pairs": 1.5,
-        "census_blocks": 3.0,
-        "note": "DOW-partitioned rolling windows with TIERED fallback (28d\u219214d\u21924d)"
-      },
-      "percentage_spike": {
-        "threshold": 30,
-        "note": "30% increase over baseline"
-      },
-      "first_appearance": {
-        "level": "DMA (winner, loser, dma) - not census block",
-        "note": "New blocks appear daily, DMA level more stable"
-      },
-      "rare_pairs": {
-        "threshold": 5,
-        "note": "Appearance rank <= 5"
-      },
-      "minimum_volume": {
-        "daily": 5,
-        "note": "Ignore pairs with < 5 wins on target date"
-      }
-    },
-    "windows": {
-      "tiered_thresholds": {
-        "preferred": "28 preceding days (needs 4+ DOW periods for weekday, 2+ for weekend)",
-        "fallback_1": "14 preceding days (needs 4+ DOW periods for weekday, 2+ for weekend)",
-        "fallback_2": "4 preceding days (needs 4+ DOW periods for weekday, 2+ for weekend)",
-        "note": "DOW partitioning prevents false positives from weekend spikes",
-        "implementation": "Tiered logic in scan_base_outliers() - selects best available window"
-      },
-      "weekday": "28d, 14d, or 4d based on availability (minimum 4 DOW periods)",
-      "weekend": "28d, 14d, or 4d based on availability (minimum 2 DOW periods - more lenient)",
-      "architectural_insight": "Calculate rolling metrics over ENTIRE time series, then filter to graph window at the end"
-    }
-  },
-  "suppression_workflow": {
-    "main_py_steps": [
-      "0. Preview base graph - Unsuppressed national shares",
-      "1. Scan outliers - Detect national-level anomalies",
-      "2. Build plan - Generate auto + distributed suppression",
-      "3. Save plan - Store to database and CSV",
-      "4. Build dataset - Apply to files (optional)",
-      "5. Preview graph - Before/after comparison"
-    ],
-    "distribution_algorithm": {
-      "stage_1_auto": {
-        "triggers": [
-          "pair_outlier_pos (z-score)",
-          "pct_outlier_pos (30% spike)",
-          "rare_pair (appearance_rank <= 5)",
-          "new_pair (first appearance)"
-        ],
-        "removal": "Excess over baseline (surgical)",
-        "minimum": "5 wins per day"
-      },
-      "stage_2_distributed": {
-        "when": "Stage 1 doesn't reach target",
-        "method": "Even distribution across all pairs",
-        "caps": "Respects pair capacity (can't remove more than exists)",
-        "goal": "No single DMA bears full burden"
-      }
-    },
-    "top_50_filter": {
-      "scope": "Total wins over entire time series",
-      "default": "Top 25 carriers (changed from 50 on 2025-10-05)",
-      "min_share_pct": "Optional filter: >= 0.5% overall share (default)",
-      "impact_with_filter": "Top 25 with 0.5% share = ~20 carriers",
-      "egregious_threshold": 40,
-      "egregious_visualization": "Orange diamonds with bold borders in graph",
-      "note": "Focus on top N (with optional share filter), but flag outliers with 40+ impact outside",
-      "functions": {
-        "get_top_n_carriers": "Supports min_share_pct parameter",
-        "scan_base_outliers": "Supports min_share_pct parameter"
-      }
-    }
-  },
-  "performance": {
-    "cube_queries": "< 1 second",
-    "rolling_view_queries": "< 2 seconds",
-    "enriched_view_creation": "2-5 seconds (filtered to window)",
-    "full_workflow": "< 30 seconds scan to preview",
-    "note": "100x+ faster than parquet scanning"
-  },
-  "key_functions": {
-    "tools.db": {
-      "get_db_path()": "Returns canonical DB path with assertion",
-      "query(sql, db_path)": "Execute SQL, return DataFrame",
-      "get_connection(db_path)": "Get DuckDB connection with assertion"
-    },
-    "tools.src.metrics": {
-      "national_timeseries()": "Win share time series",
-      "pair_metrics()": "Winner-loser pair analysis",
-      "competitor_view()": "H2H competitive landscape"
-    },
-    "tools.src.outliers": {
-      "national_outliers()": "DOW-aware z-score detection",
-      "cube_outliers()": "Query pre-computed outlier flags"
-    },
-    "tools.src.plan": {
-      "base_national_series()": "Get national shares (DB-backed)",
-      "scan_base_outliers()": "Scan for outliers (rolling views)",
-      "build_enriched_cube()": "Create UI-ready enriched view",
-      "get_top_50_carriers()": "Filter to top 50 by wins"
-    }
-  },
-  "main_py_restoration": {
-    "status": "Phase 2 COMPLETE \u2705",
-    "completed_date": "2025-10-05",
-    "phases": {
-      "phase_1": {
-        "status": "COMPLETE",
-        "date": "2025-10-04",
-        "changes": "Migrated tools/src/plan.py from parquet to database queries"
-      },
-      "phase_2": {
-        "status": "COMPLETE",
-        "date": "2025-10-05",
-        "changes": [
-          "Updated main.py to use database-backed functions",
-          "Implemented 5-step workflow (preview, scan, plan, save, compare)",
-          "Added auto + distributed suppression algorithm",
-          "Added outlier visualization graph in Step 1",
-          "CSV save working, database persistence TODO",
-          "Preview graph updated with beautiful formatting (2025-10-05)"
-        ],
-        "testing_guide": "analysis/TESTING_GUIDE.md"
-      }
-    },
-    "what_works": {
-      "step_0": "Preview base graph - national win share from cubes",
-      "step_1": "Scan outliers - DOW-aware rolling metrics + visualization graph with beautiful formatting",
-      "step_2": "Build plan - auto + distributed algorithm (NO 50% cap)",
-      "step_3": "Save plan - CSV working (database TODO)",
-      "step_5": "Preview before/after - overlay graph with matching carrier_dashboard formatting (dashed lines BEHIND solid lines)"
-    },
-    "key_features": {
-      "outlier_detection": {
-        "auto_stage_triggers": [
-          "pair_outlier_pos (z-score > 1.5)",
-          "pct_outlier_pos (30% spike)",
-          "rare_pair (IF z-score > 1.5 AND impact > 15)",
-          "new_pair (first appearance at DMA level)"
-        ],
-        "removal_amount": "FULL excess (current - baseline), NO 50% CAP",
-        "distributed_stage": "Fair allocation across all pairs"
-      },
-      "configurable_params": {
-        "z_threshold": "Slider 0.5-5.0 (default: 2.5)",
-        "top_n": "Slider 10-100 (default: 50)",
-        "egregious_threshold": "Slider 10-100 (default: 40)"
-      },
-      "graphs": {
-        "step_0": "Base national win share line chart",
-        "step_1": "Time series with X markers on outlier dates",
-        "step_5": "Overlay: solid=base, dashed=suppressed"
-      }
-    },
-    "next_steps": [
-      "User testing and validation",
-      "Database persistence for suppressions schema",
-      "Integration with carrier_suppression_dashboard.py",
-      "Census block precision (future enhancement)"
-    ]
-  },
-  "common_mistakes": {
-    "multiple_databases": "NEVER create .db files outside data/databases/",
-    "temp_files_in_root": "ALWAYS use analysis/ subdirectories",
-    "dow_confusion": "DuckDB DAYOFWEEK: 1=Sunday, strftime('%w'): 0=Sunday",
-    "missing_assertion": "ALWAYS assert db_path before connection",
-    "csv_only": "Save to BOTH database AND CSV for compatibility",
-    "nan_to_integer": "ALWAYS check for NULL AND NaN before CAST(...AS INTEGER) - use: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...)",
-    "rolling_metrics_null": "Early dates have NULL rolling metrics - TIERED approach reduces this (28d\u219214d\u21924d)",
-    "tiered_window_handling": "Use selected_window column to see which tier was used; filter WHERE selected_window IS NOT NULL to exclude early dates",
-    "rolling_view_columns": "Rolling views use: avg_wins, stddev_wins, n_periods, selected_window (NOT avg_wins_28d, n_periods_28d)",
-    "scan_base_outliers_implementation": "\u2705 CORRECT: Calculates rolling metrics over ENTIRE time series, filters to graph window at end (line 295). Always check WHERE clause is at final SELECT.",
-    "nan_handling": "\u2705 FIXED: All CAST operations now check: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...) ELSE 0/NULL",
-    "division_by_zero": "✅ FIXED 2025-10-05: All division operations use NULLIF(denominator, 0) and NaN checks. Distribution algorithm checks m==0 before dividing. Locations: tools/src/plan.py lines 312+487, main.py line 469. Commit: 36cca3a",
-    "outlier_graph_fix": "\u2705 FIXED 2025-10-05: scan_base_outliers now returns nat_share_current, nat_market_wins, day_of_week. Graph uses yellow star markers matching carrier_dashboard style."
-  },
-  "git_workflow": {
-    "branch": "codex-agent",
-    "commit_style": "<type>(scope): description",
-    "validation": "Get user approval before proceeding to next phase",
-    "testing": "Test each change immediately after implementation"
-  },
-  "analysis_workflow": {
-    "output_location": "analysis/{analysis_name}/",
-    "subdirs": {
-      "images": "analysis/{name}/images/",
-      "outputs": "analysis/{name}/outputs/",
-      "reports": "analysis/{name}/*.md"
-    },
-    "cleanup": "Remove temp files, keep final reports in docs/",
-    "vector_db": "Update .agent_memory.json after each major analysis"
-  },
-  "session_learnings": [
-    {
+  "critical_fixes": {
+    "windstream_suppression_bug": {
       "date": "2025-10-05",
-      "updates": {
-        "top_25_plus_egregious_filter": {
-          "issue": "Too many carriers (top 50) cluttered graph. Need better filtering + highlighting of egregious outliers",
-          "requirements": [
-            "Default to top 25 carriers (not 50)",
-            "Add optional min share % filter (default 0.5%)",
-            "Make egregious outliers stand out visually",
-            "Keep egregious threshold configurable (default 40)"
-          ],
-          "implementation": {
-            "get_top_n_carriers": "Added min_share_pct parameter with SQL filtering",
-            "scan_base_outliers": "Added min_share_pct parameter, passes to get_top_n_carriers",
-            "main.py": {
-              "advanced_filters": "Added expandable section with min share % slider",
-              "default_top_n": "Changed from 50 to 25",
-              "egregious_markers": {
-                "positive": "Orange diamonds, size=15, bold red border, shown in legend",
-                "negative": "Purple diamonds, size=15, bold black border (rare)",
-                "regular": "Yellow stars (positive) or red lines (negative), size=11-12, not in legend"
-              }
-            }
-          },
-          "test_results": {
-            "top_25_no_filter": "25 carriers (all)",
-            "top_25_with_0.5pct": "20 carriers (only those with >= 0.5% share)",
-            "top_50_with_0.5pct": "20 carriers (limit is share, not N)"
-          },
-          "visual_hierarchy": [
-            "1. Base lines - All carriers in ranked color order",
-            "2. Egregious outliers - Large orange/purple diamonds IN LEGEND",
-            "3. Regular outliers - Yellow stars/red lines, not in legend"
-          ],
-          "key_insight": "With 0.5% share threshold, top 25 → ~20 carriers. Cleaner visualization. Egregious outliers pop out visually.",
-          "commit": "b6cc1e8: feat(main): add top 25 + min share filter with egregious outlier highlighting"
-        },
-        "main_py_ux_refactor": {
-          "issue": "Base graph disappeared when clicking 'Scan for Outliers'. Spectrum and major carriers missing from scan results.",
-          "root_causes": [
-            "Step 0 'Preview Base Graph' was in separate button block - didn't persist",
-            "Scan section only queried flagged carriers (line 168: winners=flagged_carriers)",
-            "Two separate graphs instead of one unified view",
-            "173 lines of duplicate graphing code"
-          ],
-          "fixes_applied": [
-            "Removed Step 0 'Preview Base Graph' section entirely",
-            "Scan now queries ALL top N carriers (not just flagged)",
-            "Single unified graph showing all carriers + outlier markers",
-            "Removed duplicate graphing code (912 lines → 739 lines)",
-            "Graph shows even when zero outliers detected"
-          ],
-          "key_insight": "UX should be: 1 button → 1 graph → all data visible. Don't split into separate preview and scan views.",
-          "file": "main.py lines 46-269 (refactored from 44-442)",
-          "commits": [
-            "4b43861: show ALL top carriers in scan graph",
-            "1b36fe6: consolidate base+scan into single section"
-          ]
-        },
-        "main_py_graphing_fixes": {
-          "issue": "Outliers not displaying correctly - appeared in wrong places, colors not ranked",
-          "root_causes": [
-            "Re-smoothing only outlier points caused misalignment with main line",
-            "Colors not ranked by total wins (ascending order)",
-            "Outliers correctly calculated at national level but displayed improperly"
-          ],
-          "fixes_applied": [
-            "Pre-compute smoothed series for each carrier and store in dict",
-            "Use pre-computed smooth values for outlier marker positioning",
-            "Rank carriers by total wins (descending) before assigning colors",
-            "Apply same ranking to both base graph and outliers graph"
-          ],
-          "key_insight": "NEVER re-smooth a subset of data points. Always compute full smooth series first, then extract marker positions from it",
-          "file": "main.py lines 43-330"
-        },
-        "outlier_detection_confirmed": {
-          "scan_base_outliers": "Returns NATIONAL-level outliers only (aggregated across all DMAs)",
-          "columns": [
-            "the_date",
-            "winner",
-            "nat_z_score",
-            "impact",
-            "nat_total_wins",
-            "nat_mu_wins",
-            "nat_share_current",
-            "n_periods",
-            "selected_window",
-            "day_of_week"
-          ],
-          "test_results": {
-            "date_range": "2025-06-01 to 2025-06-30",
-            "outliers_found": 66,
-            "unique_dates": 22,
-            "unique_winners": 33,
-            "total_impact": 962
-          },
-          "note": "User confusion was about display, not calculation. Outliers ARE national, just displayed incorrectly"
-        },
-        "color_ranking_standard": {
-          "rule": "Always rank carriers by total wins (descending) before assigning colors",
-          "method": "carrier_totals = df.groupby('winner')['total_wins'].sum().sort_values(ascending=False)",
-          "palette": "px.colors.qualitative.Dark24 (consistent across dashboards)",
-          "applies_to": [
-            "base graph",
-            "outliers graph",
-            "suppression previews"
-          ]
-        },
-        "preview_graph_formatting": {
-          "issue": "Preview graph (Step 5) didn't match beautiful formatting of carrier_dashboard_duckdb.py",
-          "old_behavior": [
-            "Simple solid/dashed lines without smoothing",
-            "No color coordination",
-            "No ranking order",
-            "Suppressed lines hidden by default (visible='legendonly')",
-            "Poor hover text"
-          ],
-          "new_behavior": [
-            "3-period rolling smoothing for visual clarity",
-            "Ranked color palette (Dark24)",
-            "Layered correctly: dashed lines (suppressed) BEHIND solid lines (original)",
-            "Both lines visible by default (no hidden traces)",
-            "Rich hover text with raw/smoothed values",
-            "Subtitle explains visualization",
-            "Matching styling from carrier_dashboard_duckdb.py"
-          ],
-          "key_insight": "Dashed lines must be added FIRST (background layer), solid lines SECOND (foreground layer). Both should be visible to clearly show impact.",
-          "file": "main.py lines 749-843",
-          "commit": "d783d37: feat(main): update preview graph to match carrier_dashboard formatting"
-        },
-        "suppression_summary_improvements": {
-          "date": "2025-10-05",
-          "issues_fixed": [
-            "Duplicate 'Winner' column (index + column)",
-            "Lowercase percentage column names (old %, removed %, new %)",
-            "Deprecated use_container_width parameter",
-            "No visibility into carriers that couldn't distribute"
-          ],
-          "improvements": [
-            "Track insufficient_threshold_cases when m==0 (no eligible pairs)",
-            "Display expandable table showing carriers that couldn't meet min_wins threshold",
-            "Fixed Suppression Summary table: reset_index(drop=True) to prevent duplicate",
-            "Capitalized column names: Old %, Removed %, New %",
-            "Used .values to extract numpy arrays from Series to prevent index issues",
-            "Replaced use_container_width with width parameter (streamlit 1.50+)",
-            "st.dataframe: width='stretch' (full width)",
-            "st.plotly_chart: width='content' (natural width)"
-          ],
-          "insufficient_threshold_tracking": {
-            "location": "main.py line 390 (list initialization)",
-            "capture": "main.py lines 472-480 (when m==0)",
-            "display": "main.py lines 615-618 (expandable table)",
-            "columns": ["date", "winner", "need_remaining", "auto_removed", "min_wins_required", "reason"]
-          },
-          "summary_table_fix": {
-            "issue": "DataFrame created with index as column caused duplicate 'Winner'",
-            "solution": "Use .values for all columns, then .reset_index(drop=True)",
-            "location": "main.py lines 896-907"
-          },
-          "toggle_functionality": {
-            "working": true,
-            "modes": ["Overlay (Both)", "Original Only", "Suppressed Only"],
-            "implementation": "show_mode radio at line 681, logic at lines 793-794",
-            "rendering": "Suppressed FIRST (dashed background), Original SECOND (solid foreground)"
-          },
-          "commit": "87161f4: fix(main): improve suppression summary table and track insufficient threshold cases"
-        }
-      }
-    }
-  ]
-}  ,
-  "common_debugging_scenarios": {
-    "carrier_not_suppressed": {
-      "example": "Windstream outliers detected but not suppressed",
-      "investigation_steps": [
-        "1. Check scan_base_outliers() output - Are outliers detected?",
-        "2. Check National Outliers Summary table in UI - What's the total impact?",
-        "3. Check 'Carriers Not Meeting Threshold' table - Is carrier listed?",
-        "4. Check distribution_min_wins parameter - Too high for small carriers?",
-        "5. Verify build_enriched_cube() returns data for outlier dates"
-      ],
-      "root_causes": {
-        "insufficient_eligible_pairs": {
-          "description": "Carrier has many small pairs (< min_wins threshold)",
-          "example": "Windstream 2025-07-26: 187 wins but only 2 pairs with 5+ wins",
-          "solution": "Lower distributed_min_wins from 5 to 1-2 for small carriers",
-          "tiered_approach": "Top 10: 5+ wins, 11-25: 2+ wins, 26+: any wins"
-        },
-        "not_enough_history": {
-          "description": "Early dates don't have 4+ preceding DOW periods",
-          "example": "2025-06-01 to 2025-06-10 missing history",
-          "solution": "Expected behavior - data starts 2025-02-19, need ~28 days warmup"
-        },
-        "wrong_aggregation": {
-          "description": "Using pair-level averages instead of national totals",
-          "example": "AVG(avg_wins) from rolling view = 0.8 (wrong!)",
-          "correct": "SUM(total_wins) aggregated nationally = 53.25",
-          "note": "scan_base_outliers() does this correctly"
-        }
-      }
-    },
-    "outlier_count_discrepancy": {
-      "issue": "Rolling view shows 35 outliers, scan shows 11",
-      "explanation": [
-        "Rolling view uses PAIR-LEVEL thresholds (per DMA pair)",
-        "scan_base_outliers uses NATIONAL aggregation",
-        "Different calculation methods = different results",
-        "scan_base_outliers is correct for national-level suppression"
-      ]
+      "problem": "Windstream had 437 wins to remove but only 37 were suppressed (8.5%)",
+      "root_cause": "Hardcoded 5-win minimum for auto suppression was too high for carriers with many small DMA pairs (1-2 wins each)",
+      "solution": "Made auto_min_wins configurable (slider, default: 2). Lowered distributed_min_wins default to 1.",
+      "key_insight": "Different carriers have different pair distributions. Large carriers (AT&T) have concentrated pairs (100+ wins). Small carriers (Windstream) have distributed pairs (1-5 wins). Hardcoded thresholds fail for one or the other.",
+      "commit": "c520b1c",
+      "file": "analysis/windstream_debug_analysis.md"
     }
   },
-  "ui_features": {
-    "main_py": {
-      "national_outliers_table": {
-        "location": "After 'Scan for Outliers' button",
-        "purpose": "Show which carriers have outliers and total impact",
-        "columns": ["Carrier", "Outlier Days", "Total Impact", "Avg Impact", "Max Impact", "Total Wins", "Avg |Z-Score|"]
-      },
-      "insufficient_threshold_table": {
-        "location": "After 'Build Plan' button",
-        "purpose": "Show carriers that couldn't fully distribute",
-        "shows": "Unaddressed impact when pairs don't meet min_wins threshold",
-        "actionable": "Suggests lowering threshold"
-      },
-      "suppression_summary": {
-        "location": "Preview section",
-        "columns": ["Winner", "Base Wins", "Removed", "Wins after Suppression", "Old %", "Removed %", "New %"],
-        "purpose": "Validate suppression effectiveness"
+  "suppression_thresholds": {
+    "auto_min_wins": {
+      "default": 2,
+      "range": "1-20",
+      "purpose": "Minimum current wins for a pair to be eligible for auto suppression (outliers, first appearance, rare pairs)",
+      "guidance": "Lower for small carriers with distributed volume (Windstream, Hughes). Keep at 2-5 for large carriers."
+    },
+    "distributed_min_wins": {
+      "default": 1,
+      "range": "1-50",
+      "purpose": "Minimum current wins for a pair to receive distributed suppression",
+      "guidance": "Keep at 1 to ensure all pairs can participate in distribution. Raise to 2-5 if you want to ignore very small pairs."
+    },
+    "z_threshold": {
+      "default": 2.5,
+      "range": "0.5-5.0",
+      "purpose": "Z-score threshold for statistical outliers",
+      "guidance": "2.5 is standard (99% confidence). Lower to 1.5-2.0 for more aggressive suppression."
+    },
+    "egregious_threshold": {
+      "default": 40,
+      "range": "10-100",
+      "purpose": "Flag outliers outside top-N carriers if impact exceeds this",
+      "guidance": "40 wins is ~5% of typical daily volume. Catches major anomalies even in tail carriers."
+    }
+  },
+  "carrier_characteristics": {
+    "large_concentrated": {
+      "examples": ["AT&T", "Verizon", "T-Mobile", "Spectrum"],
+      "pair_pattern": "Few DMAs, high volume per pair (50-200 wins)",
+      "outlier_pattern": "Single pair spikes dominate national outliers",
+      "threshold_recommendations": {
+        "auto_min_wins": "2-5",
+        "distributed_min_wins": "5-10"
+      }
+    },
+    "small_distributed": {
+      "examples": ["Windstream", "Hughes", "Consolidated"],
+      "pair_pattern": "Many DMAs, low volume per pair (1-5 wins)",
+      "outlier_pattern": "National outliers from cumulative effect of many small pair spikes",
+      "threshold_recommendations": {
+        "auto_min_wins": "1-2",
+        "distributed_min_wins": "1"
       }
     }
   }
