@@ -271,12 +271,12 @@ def scan_base_outliers(
                 n_periods,
                 selected_window,
                 CASE 
-                    WHEN nat_sigma_wins > 0 AND nat_mu_wins IS NOT NULL THEN 
+                    WHEN nat_sigma_wins > 0 AND nat_mu_wins IS NOT NULL AND NOT isnan(nat_mu_wins) THEN 
                         (nat_total_wins - nat_mu_wins) / nat_sigma_wins
                     ELSE 0 
                 END as nat_z_score,
                 CASE 
-                    WHEN nat_mu_wins IS NOT NULL AND NOT isnan(nat_mu_wins) THEN 
+                    WHEN nat_mu_wins IS NOT NULL AND NOT isnan(nat_mu_wins) AND nat_mu_wins > 0 THEN 
                         CAST(ROUND(nat_total_wins - nat_mu_wins) AS INTEGER)
                     ELSE 0
                 END as impact
@@ -346,18 +346,29 @@ def build_enriched_cube(
                 dma_name,
                 state,
                 total_wins as pair_wins_current,
-                avg_wins_28d as pair_mu_wins,
-                stddev_wins_28d as pair_sigma_wins,
+                avg_wins as pair_mu_wins,
+                stddev_wins as pair_sigma_wins,
                 zscore as pair_z,
                 pct_change as pair_pct_change,
                 is_first_appearance as new_pair,
                 is_outlier as pair_outlier_pos,
                 CASE WHEN pct_change > 30 THEN true ELSE false END as pct_outlier_pos,
-                CASE WHEN appearance_rank <= 5 THEN true ELSE false END as rare_pair,
-                n_periods_28d as pair_mu_window
+                -- Rare pairs: Only if they have z-score violations AND impact > 15
+                CASE 
+                    WHEN appearance_rank <= 5 
+                        AND zscore > 1.5 
+                        AND avg_wins IS NOT NULL 
+                        AND NOT isnan(avg_wins)
+                        AND (total_wins - avg_wins) > 15
+                    THEN true 
+                    ELSE false 
+                END as rare_pair,
+                n_periods as pair_mu_window,
+                selected_window
             FROM {rolling_view}
             WHERE the_date BETWEEN '{start_date}' AND '{end_date}'
                 AND total_wins >= 5  -- Minimum volume filter
+                AND selected_window IS NOT NULL  -- Only include dates with valid rolling metrics
         ),
         national_daily AS (
             SELECT
@@ -416,13 +427,13 @@ def build_enriched_cube(
             n.nat_sigma_share,
             -- National z-score
             CASE 
-                WHEN n.nat_sigma_wins > 0 AND n.nat_mu_wins IS NOT NULL THEN 
+                WHEN n.nat_sigma_wins > 0 AND n.nat_mu_wins IS NOT NULL AND NOT isnan(n.nat_mu_wins) THEN 
                     (n.nat_total_wins - n.nat_mu_wins) / n.nat_sigma_wins
                 ELSE 0 
             END as nat_z_score,
             -- Impact (excess over baseline)
             CASE 
-                WHEN n.nat_mu_wins IS NOT NULL AND n.nat_mu_wins > 0 THEN 
+                WHEN n.nat_mu_wins IS NOT NULL AND NOT isnan(n.nat_mu_wins) AND n.nat_mu_wins > 0 THEN 
                     CAST(ROUND(n.nat_total_wins - n.nat_mu_wins) AS INTEGER)
                 ELSE 0
             END as impact
