@@ -67,3 +67,43 @@ Suggested Local Config
 - [ ] Docker containerization for n8n agent integration
 - [ ] API endpoint exposure for external tool integration
 
+
+## Pre-Agg Version Support (v0.3 and v15.0)
+
+### Overview
+The project supports two versions of pre-aggregated data with different census block vintages:
+
+- **v0.3**: 2010 census blocks, 21 columns
+  - Path pattern: `~/tmp/platform_pre_aggregate_v_0_3/{ds}/{date}/{uuid}/`
+  - Crosswalk: `ref/d_census_block_crosswalk/5bb9481d-6e03-4802-a965-8a5242e74d65/`
+  
+- **v15.0**: 2020 census blocks, 35 columns (current default)
+  - Path pattern: `~/tmp/platform_pre_agg_v_15_0/{date}/{uuid}/`
+  - Crosswalk: `ref/cb_cw_2020/`
+
+### Key Differences
+
+| Aspect | v0.3 | v15.0 |
+|--------|------|-------|
+| Census vintage | 2010 | 2020 |
+| Blockid column | `census_blockid` | `primary_geoid` |
+| Crosswalk join key | `serv_terr_blockid` | `census_blockid` |
+| Partitioning columns | Derive from `the_date` | Has `year`, `month`, `day` |
+| Has `ds` column | ✅ Yes | ✅ Yes |
+
+### Database Build Process
+1. Auto-detect version from schema (inspect columns)
+2. Use version-specific crosswalk and join keys
+3. Normalize into common `carrier_data` schema
+4. Build version-specific database (e.g., `duck_suppression_v03.db`)
+
+### Important Notes
+- Cube builders, dashboards, and analysis tools are version-agnostic
+- They operate on normalized `carrier_data` table
+- Can't directly compare v0.3 and v15.0 at census block level (different geographies)
+- Aggregate to DMA level for cross-version comparisons
+
+### Related Documentation
+- `analysis/preagg_v03_support/MIGRATION_PLAN.md` - Full technical details
+- `analysis/preagg_v03_support/QUICK_SUMMARY.md` - Executive summary
+
