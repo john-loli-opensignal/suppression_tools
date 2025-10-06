@@ -118,22 +118,28 @@ def scan_base_outliers(
     egregious_threshold: int = 40,
     db_path: Optional[str] = None
 ) -> pd.DataFrame:
-    """Scan for national-level outliers using rolling views.
+    """Scan for national-level outliers using tiered rolling windows.
+    
+    Computes rolling metrics from the beginning of the time series using tiered logic:
+    - Try 28d window (needs 4+ DOW samples for weekdays, 2+ for weekends)
+    - Fall back to 14d window (needs 4+ DOW samples for weekdays, 2+ for weekends)
+    - Fall back to 4d window (minimum threshold)
+    - Then filter results to the graph window (start_date to end_date)
     
     Focuses on top N carriers, but flags egregious outliers outside top N.
     
     Args:
         ds: Dataset name
         mover_ind: True for movers, False for non-movers
-        start_date: Start date for scan window
-        end_date: End date for scan window
+        start_date: Start date for graph window
+        end_date: End date for graph window
         z_threshold: Z-score threshold for outlier detection
         top_n: Number of top carriers to focus on
         egregious_threshold: Impact threshold for non-top-N carriers
         db_path: Path to database
         
     Returns:
-        DataFrame with columns: the_date, winner, nat_z_score, impact
+        DataFrame with columns: the_date, winner, nat_z_score, impact, selected_window
     """
     if db_path is None:
         db_path = db.get_default_db_path()
@@ -146,58 +152,135 @@ def scan_base_outliers(
     top_carriers = get_top_n_carriers(ds, mover_ind, top_n, db_path)
     top_carriers_str = ','.join([f"'{c}'" for c in top_carriers])
     
-    rolling_view = f"{ds}_win_{'mover' if mover_ind else 'non_mover'}_rolling"
+    cube_table = f"{ds}_win_{'mover' if mover_ind else 'non_mover'}_cube"
     
-    # National aggregation with outlier detection
+    # National aggregation with tiered rolling windows
+    # Key insight: Calculate rolling metrics over ENTIRE series, then filter to window at the end
     sql = f"""
         WITH national_daily AS (
             SELECT 
                 the_date,
+                DAYOFWEEK(the_date) as dow,  -- 1=Sunday, 7=Saturday
                 winner,
                 SUM(total_wins) as nat_total_wins,
                 SUM(SUM(total_wins)) OVER (PARTITION BY the_date) as nat_market_wins
-            FROM {rolling_view}
-            WHERE the_date BETWEEN '{start_date}' AND '{end_date}'
-            GROUP BY the_date, winner, day_of_week
+            FROM {cube_table}
+            GROUP BY the_date, winner
         ),
+        -- Self-join approach for DOW-partitioned rolling windows
+        with_history AS (
+            SELECT 
+                curr.the_date,
+                curr.dow,
+                curr.winner,
+                curr.nat_total_wins,
+                curr.nat_market_wins,
+                hist.the_date as hist_date,
+                hist.nat_total_wins as hist_wins,
+                DATEDIFF('day', hist.the_date, curr.the_date) as days_back
+            FROM national_daily curr
+            LEFT JOIN national_daily hist
+                ON curr.winner = hist.winner
+                AND curr.dow = hist.dow
+                AND hist.the_date < curr.the_date
+        ),
+        -- Calculate 28d, 14d, and 4d rolling metrics
         with_rolling AS (
             SELECT 
                 the_date,
+                dow,
                 winner,
                 nat_total_wins,
                 nat_market_wins,
-                nat_total_wins / NULLIF(nat_market_wins, 0) as nat_share_current,
-                -- DOW-partitioned rolling metrics
-                AVG(nat_total_wins) OVER (
-                    PARTITION BY winner, EXTRACT(DOW FROM the_date)
-                    ORDER BY the_date 
-                    ROWS BETWEEN 13 PRECEDING AND 1 PRECEDING
-                ) as nat_mu_wins,
-                STDDEV(nat_total_wins) OVER (
-                    PARTITION BY winner, EXTRACT(DOW FROM the_date)
-                    ORDER BY the_date 
-                    ROWS BETWEEN 13 PRECEDING AND 1 PRECEDING
-                ) as nat_sigma_wins
-            FROM national_daily
+                
+                -- 28-day window metrics
+                AVG(CASE WHEN days_back <= 28 THEN hist_wins END) as avg_28d,
+                STDDEV(CASE WHEN days_back <= 28 THEN hist_wins END) as std_28d,
+                COUNT(CASE WHEN days_back <= 28 THEN 1 END) as n_28d,
+                
+                -- 14-day window metrics
+                AVG(CASE WHEN days_back <= 14 THEN hist_wins END) as avg_14d,
+                STDDEV(CASE WHEN days_back <= 14 THEN hist_wins END) as std_14d,
+                COUNT(CASE WHEN days_back <= 14 THEN 1 END) as n_14d,
+                
+                -- 4-day window metrics
+                AVG(CASE WHEN days_back <= 4 THEN hist_wins END) as avg_4d,
+                STDDEV(CASE WHEN days_back <= 4 THEN hist_wins END) as std_4d,
+                COUNT(CASE WHEN days_back <= 4 THEN 1 END) as n_4d
+            FROM with_history
+            GROUP BY the_date, dow, winner, nat_total_wins, nat_market_wins
+        ),
+        -- Tiered selection: Choose best available window based on DOW and sample count
+        tiered_metrics AS (
+            SELECT 
+                the_date,
+                dow,
+                winner,
+                nat_total_wins,
+                nat_market_wins,
+                -- Weekday needs 4+ samples, weekend needs 2+
+                CASE 
+                    -- Try 28d first
+                    WHEN dow IN (1, 7) AND n_28d >= 2 THEN avg_28d  -- Weekend
+                    WHEN dow NOT IN (1, 7) AND n_28d >= 4 THEN avg_28d  -- Weekday
+                    -- Fall back to 14d
+                    WHEN dow IN (1, 7) AND n_14d >= 2 THEN avg_14d
+                    WHEN dow NOT IN (1, 7) AND n_14d >= 4 THEN avg_14d
+                    -- Fall back to 4d
+                    WHEN dow IN (1, 7) AND n_4d >= 2 THEN avg_4d
+                    WHEN dow NOT IN (1, 7) AND n_4d >= 4 THEN avg_4d
+                    ELSE NULL
+                END as nat_mu_wins,
+                CASE 
+                    WHEN dow IN (1, 7) AND n_28d >= 2 THEN std_28d
+                    WHEN dow NOT IN (1, 7) AND n_28d >= 4 THEN std_28d
+                    WHEN dow IN (1, 7) AND n_14d >= 2 THEN std_14d
+                    WHEN dow NOT IN (1, 7) AND n_14d >= 4 THEN std_14d
+                    WHEN dow IN (1, 7) AND n_4d >= 2 THEN std_4d
+                    WHEN dow NOT IN (1, 7) AND n_4d >= 4 THEN std_4d
+                    ELSE NULL
+                END as nat_sigma_wins,
+                CASE 
+                    WHEN dow IN (1, 7) AND n_28d >= 2 THEN n_28d
+                    WHEN dow NOT IN (1, 7) AND n_28d >= 4 THEN n_28d
+                    WHEN dow IN (1, 7) AND n_14d >= 2 THEN n_14d
+                    WHEN dow NOT IN (1, 7) AND n_14d >= 4 THEN n_14d
+                    WHEN dow IN (1, 7) AND n_4d >= 2 THEN n_4d
+                    WHEN dow NOT IN (1, 7) AND n_4d >= 4 THEN n_4d
+                    ELSE NULL
+                END as n_periods,
+                CASE 
+                    WHEN dow IN (1, 7) AND n_28d >= 2 THEN 28
+                    WHEN dow NOT IN (1, 7) AND n_28d >= 4 THEN 28
+                    WHEN dow IN (1, 7) AND n_14d >= 2 THEN 14
+                    WHEN dow NOT IN (1, 7) AND n_14d >= 4 THEN 14
+                    WHEN dow IN (1, 7) AND n_4d >= 2 THEN 4
+                    WHEN dow NOT IN (1, 7) AND n_4d >= 4 THEN 4
+                    ELSE NULL
+                END as selected_window
+            FROM with_rolling
         ),
         with_zscore AS (
             SELECT 
                 the_date,
+                dow,
                 winner,
                 nat_total_wins,
                 nat_mu_wins,
                 nat_sigma_wins,
+                n_periods,
+                selected_window,
                 CASE 
                     WHEN nat_sigma_wins > 0 AND nat_mu_wins IS NOT NULL THEN 
                         (nat_total_wins - nat_mu_wins) / nat_sigma_wins
                     ELSE 0 
                 END as nat_z_score,
                 CASE 
-                    WHEN nat_mu_wins IS NOT NULL AND nat_mu_wins > 0 THEN 
+                    WHEN nat_mu_wins IS NOT NULL AND NOT isnan(nat_mu_wins) THEN 
                         CAST(ROUND(nat_total_wins - nat_mu_wins) AS INTEGER)
                     ELSE 0
                 END as impact
-            FROM with_rolling
+            FROM tiered_metrics
         )
         SELECT 
             the_date,
@@ -205,14 +288,18 @@ def scan_base_outliers(
             nat_z_score,
             impact,
             nat_total_wins,
-            nat_mu_wins
+            nat_mu_wins,
+            n_periods,
+            selected_window
         FROM with_zscore
-        WHERE (
-            -- Top N carriers with z-score violations
-            (winner IN ({top_carriers_str}) AND nat_z_score > {z_threshold})
-            -- OR egregious outliers outside top N
-            OR (winner NOT IN ({top_carriers_str}) AND impact > {egregious_threshold})
-        )
+        WHERE the_date BETWEEN '{start_date}' AND '{end_date}'  -- Filter to graph window at the end
+            AND selected_window IS NOT NULL  -- Only include dates with valid rolling metrics
+            AND (
+                -- Top N carriers with z-score violations
+                (winner IN ({top_carriers_str}) AND nat_z_score > {z_threshold})
+                -- OR egregious outliers outside top N
+                OR (winner NOT IN ({top_carriers_str}) AND impact > {egregious_threshold})
+            )
         ORDER BY the_date, winner
     """
     return db.query(sql, db_path)

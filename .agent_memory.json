@@ -77,7 +77,7 @@
         "national": 2.5,
         "dma_pairs": 1.5,
         "census_blocks": 3.0,
-        "note": "DOW-partitioned rolling windows"
+        "note": "DOW-partitioned rolling windows with TIERED fallback (28d→14d→4d)"
       },
       "percentage_spike": {
         "threshold": 30,
@@ -98,13 +98,15 @@
     },
     "windows": {
       "tiered_thresholds": {
-        "preferred": "28 preceding days (needs 4+ periods for weekday, 2+ for weekend)",
-        "fallback_1": "14 preceding days (needs 4+ periods for weekday, 2+ for weekend)",
-        "fallback_2": "4 preceding days (needs 4 periods for weekday, 2+ for weekend)",
-        "note": "DOW partitioning prevents false positives from weekend spikes"
+        "preferred": "28 preceding days (needs 4+ DOW periods for weekday, 2+ for weekend)",
+        "fallback_1": "14 preceding days (needs 4+ DOW periods for weekday, 2+ for weekend)",
+        "fallback_2": "4 preceding days (needs 4+ DOW periods for weekday, 2+ for weekend)",
+        "note": "DOW partitioning prevents false positives from weekend spikes",
+        "implementation": "Tiered logic in scan_base_outliers() - selects best available window"
       },
-      "weekday": "28d, 14d, or 4d based on availability (minimum 4 periods)",
-      "weekend": "28d, 14d, or 4d based on availability (minimum 2 periods - more lenient)"
+      "weekday": "28d, 14d, or 4d based on availability (minimum 4 DOW periods)",
+      "weekend": "28d, 14d, or 4d based on availability (minimum 2 DOW periods - more lenient)",
+      "architectural_insight": "Calculate rolling metrics over ENTIRE time series, then filter to graph window at the end"
     }
   },
   "suppression_workflow": {
@@ -170,13 +172,14 @@
     }
   },
   "main_py_restoration": {
-    "status": "COMPLETE - Phase 2 finished",
+    "status": "IN PROGRESS - Phase 2 Testing",
     "plan_location": "analysis/main_py_restoration_plan.md",
     "summary_location": "analysis/restoration_summary.md",
     "approach": "Phase-by-phase with validation at each step",
     "estimated_hours": 13,
     "phase_1_complete": true,
-    "phase_2_complete": true,
+    "phase_2_complete": false,
+    "phase_2_status": "Testing - scan_base_outliers implemented with tiered rolling windows",
     "decisions_made": {
       "z_score_thresholds": "UI sliders with defaults (nat: 2.5, dma: 1.5)",
       "egregious_threshold": "Impact > 40 (national level)",
