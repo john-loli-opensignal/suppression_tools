@@ -246,16 +246,18 @@ def competitor_view(
         GROUP BY the_date
     )
     SELECT 
-        w.the_date,
-        w.competitor,
+        COALESCE(w.the_date, l.the_date) as the_date,
+        COALESCE(w.competitor, l.competitor) as competitor,
         COALESCE(w.h2h_wins, 0) as h2h_wins,
         COALESCE(l.h2h_losses, 0) as h2h_losses,
-        pw.primary_total_wins,
-        pl.primary_total_losses
+        COALESCE(pw.primary_total_wins, 0) as primary_total_wins,
+        COALESCE(pl.primary_total_losses, 0) as primary_total_losses
     FROM h2h_wins w
-    FULL OUTER JOIN h2h_losses l USING (the_date, competitor)
+    FULL OUTER JOIN h2h_losses l ON w.the_date = l.the_date AND w.competitor = l.competitor
     LEFT JOIN primary_totals_win pw ON pw.the_date = COALESCE(w.the_date, l.the_date)
     LEFT JOIN primary_totals_loss pl ON pl.the_date = COALESCE(w.the_date, l.the_date)
+    WHERE COALESCE(w.competitor, l.competitor) IS NOT NULL
+      AND COALESCE(w.the_date, l.the_date) IS NOT NULL
     ORDER BY the_date, competitor
     """
     

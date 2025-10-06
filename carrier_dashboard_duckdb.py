@@ -493,6 +493,12 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
     if base.empty:
         return pd.DataFrame(columns=["the_date", "competitor", metric])
     
+    # Ensure data types are correct
+    base['h2h_wins'] = pd.to_numeric(base['h2h_wins'], errors='coerce').fillna(0)
+    base['h2h_losses'] = pd.to_numeric(base['h2h_losses'], errors='coerce').fillna(0)
+    base['primary_total_wins'] = pd.to_numeric(base['primary_total_wins'], errors='coerce').fillna(0)
+    base['primary_total_losses'] = pd.to_numeric(base['primary_total_losses'], errors='coerce').fillna(0)
+    
     # Store raw wins and losses for tooltips
     base['raw_wins'] = base['h2h_wins']
     base['raw_losses'] = base['h2h_losses']
