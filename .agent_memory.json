@@ -34,13 +34,18 @@
       "columns": [
         "the_date", "day_of_week", "winner", "loser", "dma", "dma_name", "state",
         "total_wins", "record_count",
-        "avg_wins_28d", "stddev_wins_28d", "n_periods_28d",
+        "avg_wins", "stddev_wins", "n_periods", "selected_window",
         "zscore", "pct_change",
         "is_first_appearance", "is_outlier",
         "appearance_rank"
       ],
-      "note": "DOW-aware rolling metrics - 28d window partitioned by day_of_week",
-      "dow_mapping": "DuckDB: 0=Monday...6=Sunday (use DAYOFWEEK() for 1=Sunday...7=Saturday)"
+      "note": "DOW-aware rolling metrics with TIERED windows (28d preferred, fall back to 14d, then 4d)",
+      "dow_mapping": "DuckDB: 0=Monday...6=Sunday (use DAYOFWEEK() for 1=Sunday...7=Saturday)",
+      "tiered_logic": {
+        "weekday": "Requires 4+ periods minimum (28d, 14d, or 4d)",
+        "weekend": "Requires 2+ periods minimum (more lenient due to fewer samples)",
+        "selected_window": "Column shows which tier was used (28, 14, 4, or NULL)"
+      }
     },
     "enriched_views": {
       "pattern": "{ds}_win_{mover|non_mover}_enriched",
@@ -92,9 +97,14 @@
       }
     },
     "windows": {
-      "weekday": "14 days (28d window = ~14 same-DOW)",
-      "weekend": "4-14 days minimum (fewer Sat/Sun samples)",
-      "note": "DOW partitioning prevents false positives from weekend spikes"
+      "tiered_thresholds": {
+        "preferred": "28 preceding days (needs 4+ periods for weekday, 2+ for weekend)",
+        "fallback_1": "14 preceding days (needs 4+ periods for weekday, 2+ for weekend)",
+        "fallback_2": "4 preceding days (needs 4 periods for weekday, 2+ for weekend)",
+        "note": "DOW partitioning prevents false positives from weekend spikes"
+      },
+      "weekday": "28d, 14d, or 4d based on availability (minimum 4 periods)",
+      "weekend": "28d, 14d, or 4d based on availability (minimum 2 periods - more lenient)"
     }
   },
   "suppression_workflow": {
@@ -188,8 +198,9 @@
     "dow_confusion": "DuckDB DAYOFWEEK: 1=Sunday, strftime('%w'): 0=Sunday",
     "missing_assertion": "ALWAYS assert db_path before connection",
     "csv_only": "Save to BOTH database AND CSV for compatibility",
-    "nan_to_integer": "ALWAYS check for NULL/NaN before CAST(...AS INTEGER) - use CASE WHEN ... IS NOT NULL",
-    "rolling_metrics_null": "Early dates have NULL rolling metrics - handle gracefully with COALESCE or NULL checks"
+    "nan_to_integer": "ALWAYS check for NULL/NaN before CAST(...AS INTEGER) - use CASE WHEN ... IS NOT NULL OR COALESCE",
+    "rolling_metrics_null": "Early dates have NULL rolling metrics - TIERED approach reduces this (28d→14d→4d)",
+    "tiered_window_handling": "Use selected_window column to see which tier was used; filter WHERE selected_window IS NOT NULL to exclude early dates"
   },
   "git_workflow": {
     "branch": "codex-agent",
