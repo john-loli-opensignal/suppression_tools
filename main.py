@@ -78,13 +78,35 @@ def ui():
                     carrier_totals = ts.groupby('winner')['total_wins'].sum().sort_values(ascending=False)
                     carriers_ranked = carrier_totals.index.tolist()
                     
+                    # Check if we have scanned outliers to overlay
+                    ts_copy = ts.copy()
+                    ts_copy['the_date'] = pd.to_datetime(ts_copy['the_date'])
+                    
+                    if 'base_outliers' in st.session_state and st.session_state['base_outliers'] is not None:
+                        outliers_copy = st.session_state['base_outliers'].copy()
+                        outliers_copy['the_date'] = pd.to_datetime(outliers_copy['the_date'])
+                        outliers_copy['is_outlier'] = True
+                        
+                        ts_with_outliers = ts_copy.merge(
+                            outliers_copy[['the_date', 'winner', 'is_outlier', 'nat_z_score', 'impact']],
+                            on=['the_date', 'winner'],
+                            how='left'
+                        )
+                        ts_with_outliers['is_outlier'] = ts_with_outliers['is_outlier'].fillna(False)
+                    else:
+                        ts_with_outliers = ts_copy.copy()
+                        ts_with_outliers['is_outlier'] = False
+                    
                     # Use the same palette from carrier dashboard
                     palette = px.colors.qualitative.Dark24
                     color_map = {c: palette[i % len(palette)] for i, c in enumerate(carriers_ranked)}
                     
                     fig = go.Figure()
+                    carrier_smoothed = {}
+                    
+                    # Add lines for each carrier
                     for w in carriers_ranked:
-                        sub = ts[ts['winner'] == w].sort_values('the_date')
+                        sub = ts_with_outliers[ts_with_outliers['winner'] == w].sort_values('the_date')
                         series = sub['win_share'] * 100  # Convert to percentage
                         
                         # Apply 3-period rolling smoothing
@@ -92,6 +114,10 @@ def ui():
                             smooth = series.rolling(window=3, center=True, min_periods=1).mean()
                         else:
                             smooth = series
+                        
+                        # Store for marker positioning
+                        carrier_smoothed[w] = smooth.copy()
+                        carrier_smoothed[w].index = sub['the_date']
                         
                         # Create hover text
                         hover_text = [
@@ -108,6 +134,79 @@ def ui():
                             hoverinfo='text',
                             hovertext=hover_text
                         ))
+                    
+                    # Add outlier markers if available
+                    if 'base_outliers' in st.session_state and st.session_state['base_outliers'] is not None:
+                        for w in carriers_ranked:
+                            outlier_sub = ts_with_outliers[
+                                (ts_with_outliers['winner'] == w) & 
+                                (ts_with_outliers['is_outlier'] == True)
+                            ]
+                            if not outlier_sub.empty:
+                                smooth_series = carrier_smoothed[w]
+                                
+                                pos_out = outlier_sub[outlier_sub['nat_z_score'] >= 0]
+                                neg_out = outlier_sub[outlier_sub['nat_z_score'] < 0]
+                                
+                                if not pos_out.empty:
+                                    pos_y = [smooth_series.get(d, (pos_out.loc[pos_out['the_date']==d, 'win_share'].iloc[0] * 100)) 
+                                             for d in pos_out['the_date']]
+                                    
+                                    hover_text = [
+                                        f"{w}<br>{d.date()}<br>Share: {y:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
+                                        for d, y, z, imp in zip(
+                                            pos_out['the_date'], 
+                                            pos_y,
+                                            pos_out['nat_z_score'].fillna(0),
+                                            pos_out['impact'].fillna(0)
+                                        )
+                                    ]
+                                    fig.add_trace(go.Scatter(
+                                        x=pos_out['the_date'],
+                                        y=pos_y,
+                                        mode='markers',
+                                        name=f'{w} outlier (+)',
+                                        marker=dict(
+                                            symbol='star', 
+                                            color='yellow', 
+                                            size=11, 
+                                            line=dict(color='black', width=0.6),
+                                            opacity=0.95
+                                        ),
+                                        showlegend=False,
+                                        hoverinfo='text',
+                                        hovertext=hover_text
+                                    ))
+                                
+                                if not neg_out.empty:
+                                    neg_y = [smooth_series.get(d, (neg_out.loc[neg_out['the_date']==d, 'win_share'].iloc[0] * 100)) 
+                                             for d in neg_out['the_date']]
+                                    
+                                    hover_text = [
+                                        f"{w}<br>{d.date()}<br>Share: {y:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
+                                        for d, y, z, imp in zip(
+                                            neg_out['the_date'], 
+                                            neg_y,
+                                            neg_out['nat_z_score'].fillna(0),
+                                            neg_out['impact'].fillna(0)
+                                        )
+                                    ]
+                                    fig.add_trace(go.Scatter(
+                                        x=neg_out['the_date'],
+                                        y=neg_y,
+                                        mode='markers',
+                                        name=f'{w} outlier (-)',
+                                        marker=dict(
+                                            symbol='line-ew', 
+                                            color='red', 
+                                            size=12,
+                                            line=dict(color='black', width=0.6),
+                                            opacity=0.95
+                                        ),
+                                        showlegend=False,
+                                        hoverinfo='text',
+                                        hovertext=hover_text
+                                    ))
                     
                     fig.update_layout(
                         title=dict(text=f'National Win Share - {ds} {"Mover" if mover_ind else "Non-Mover"}', x=0.01, xanchor='left'),
@@ -164,12 +263,12 @@ def ui():
                 # Display outliers graph
                 st.subheader('National Win Share with Outliers Flagged')
                 try:
-                    # Get full time series for flagged carriers
-                    flagged_carriers = outliers_df['winner'].unique().tolist()
+                    # Get full time series for ALL top carriers (not just flagged)
+                    all_top_carriers = get_top_n_carriers(ds, mover_ind, n=top_n, db_path=db_path)
                     ts = base_national_series(
                         ds=ds,
                         mover_ind=mover_ind,
-                        winners=flagged_carriers,
+                        winners=all_top_carriers,
                         start_date=str(view_start),
                         end_date=str(view_end),
                         db_path=db_path
