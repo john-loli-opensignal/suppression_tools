@@ -172,14 +172,14 @@
     }
   },
   "main_py_restoration": {
-    "status": "IN PROGRESS - Phase 2 Testing",
+    "status": "Phase 2 Complete - Testing main.py UI",
     "plan_location": "analysis/main_py_restoration_plan.md",
     "summary_location": "analysis/restoration_summary.md",
     "approach": "Phase-by-phase with validation at each step",
     "estimated_hours": 13,
     "phase_1_complete": true,
-    "phase_2_complete": false,
-    "phase_2_status": "Testing - NaN handling fixes applied, ready for main.py testing",
+    "phase_2_complete": true,
+    "phase_2_status": "✅ All helper functions working, NaN fixes applied, main.py running on port 8502",
     "decisions_made": {
       "z_score_thresholds": "UI sliders with defaults (nat: 2.5, dma: 1.5)",
       "egregious_threshold": "Impact > 40 (national level)",
@@ -204,7 +204,9 @@
     "nan_to_integer": "ALWAYS check for NULL AND NaN before CAST(...AS INTEGER) - use: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...)",
     "rolling_metrics_null": "Early dates have NULL rolling metrics - TIERED approach reduces this (28d→14d→4d)",
     "tiered_window_handling": "Use selected_window column to see which tier was used; filter WHERE selected_window IS NOT NULL to exclude early dates",
-    "rolling_view_columns": "Rolling views use: avg_wins, stddev_wins, n_periods, selected_window (NOT avg_wins_28d, n_periods_28d)"
+    "rolling_view_columns": "Rolling views use: avg_wins, stddev_wins, n_periods, selected_window (NOT avg_wins_28d, n_periods_28d)",
+    "scan_base_outliers_implementation": "✅ CORRECT: Calculates rolling metrics over ENTIRE time series, filters to graph window at end (line 295). Always check WHERE clause is at final SELECT.",
+    "nan_handling": "✅ FIXED: All CAST operations now check: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...) ELSE 0/NULL"
   },
   "git_workflow": {
     "branch": "codex-agent",
