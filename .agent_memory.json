@@ -77,6 +77,40 @@
       }
     }
   },
+  "preagg_version_support": {
+    "v0.3": {
+      "name": "v2.1 Production",
+      "census_vintage": 2010,
+      "path_pattern": "~/tmp/platform_pre_aggregate_v_0_3/{ds}/{date}/{uuid}/",
+      "database_file": "data/databases/duck_suppression_v_2_1_prod.db",
+      "crosswalk": "ref/d_census_block_crosswalk/5bb9481d-6e03-4802-a965-8a5242e74d65/",
+      "blockid_col": "census_blockid",
+      "crosswalk_join_key": "serv_terr_blockid",
+      "has_ds_column": true,
+      "has_partitioning_cols": false,
+      "total_columns": 21,
+      "notes": "2010 census blocks, may need ds inference if column missing"
+    },
+    "v15.0": {
+      "name": "Current Production",
+      "census_vintage": 2020,
+      "path_pattern": "~/tmp/platform_pre_agg_v_15_0/{date}/{uuid}/",
+      "database_file": "data/databases/duck_suppression.db",
+      "crosswalk": "ref/cb_cw_2020/90226c5d-f3bf-47eb-963a-e03545c972bd/",
+      "blockid_col": "primary_geoid",
+      "crosswalk_join_key": "census_blockid",
+      "has_ds_column": true,
+      "has_partitioning_cols": true,
+      "total_columns": 35,
+      "notes": "2020 census blocks, current default"
+    },
+    "cross_version_notes": {
+      "safe_comparisons": ["DMA level", "State level", "National level", "Carrier metrics"],
+      "unsafe_comparisons": ["Census block level (different geographies)"],
+      "cube_compatibility": "Cubes work with both versions (normalized schema)",
+      "dashboard_compatibility": "Dashboards work with both (just change DB path)"
+    }
+  },
   "outlier_detection": {
     "two_different_algorithms": {
       "carrier_dashboard_duckdb": {
