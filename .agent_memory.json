@@ -258,12 +258,12 @@
     "missing_assertion": "ALWAYS assert db_path before connection",
     "csv_only": "Save to BOTH database AND CSV for compatibility",
     "nan_to_integer": "ALWAYS check for NULL AND NaN before CAST(...AS INTEGER) - use: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...)",
-    "rolling_metrics_null": "Early dates have NULL rolling metrics - TIERED approach reduces this (28d→14d→4d)",
+    "rolling_metrics_null": "Early dates have NULL rolling metrics - TIERED approach reduces this (28d\u219214d\u21924d)",
     "tiered_window_handling": "Use selected_window column to see which tier was used; filter WHERE selected_window IS NOT NULL to exclude early dates",
     "rolling_view_columns": "Rolling views use: avg_wins, stddev_wins, n_periods, selected_window (NOT avg_wins_28d, n_periods_28d)",
-    "scan_base_outliers_implementation": "✅ CORRECT: Calculates rolling metrics over ENTIRE time series, filters to graph window at end (line 295). Always check WHERE clause is at final SELECT.",
-    "nan_handling": "✅ FIXED: All CAST operations now check: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...) ELSE 0/NULL",
-    "outlier_graph_fix": "✅ FIXED 2025-10-05: scan_base_outliers now returns nat_share_current, nat_market_wins, day_of_week. Graph uses yellow star markers matching carrier_dashboard style."
+    "scan_base_outliers_implementation": "\u2705 CORRECT: Calculates rolling metrics over ENTIRE time series, filters to graph window at end (line 295). Always check WHERE clause is at final SELECT.",
+    "nan_handling": "\u2705 FIXED: All CAST operations now check: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...) ELSE 0/NULL",
+    "outlier_graph_fix": "\u2705 FIXED 2025-10-05: scan_base_outliers now returns nat_share_current, nat_market_wins, day_of_week. Graph uses yellow star markers matching carrier_dashboard style."
   },
   "git_workflow": {
     "branch": "codex-agent",
@@ -280,5 +280,61 @@
     },
     "cleanup": "Remove temp files, keep final reports in docs/",
     "vector_db": "Update .agent_memory.json after each major analysis"
-  }
+  },
+  "session_learnings": [
+    {
+      "date": "2025-10-05",
+      "updates": {
+        "main_py_graphing_fixes": {
+          "issue": "Outliers not displaying correctly - appeared in wrong places, colors not ranked",
+          "root_causes": [
+            "Re-smoothing only outlier points caused misalignment with main line",
+            "Colors not ranked by total wins (ascending order)",
+            "Outliers correctly calculated at national level but displayed improperly"
+          ],
+          "fixes_applied": [
+            "Pre-compute smoothed series for each carrier and store in dict",
+            "Use pre-computed smooth values for outlier marker positioning",
+            "Rank carriers by total wins (descending) before assigning colors",
+            "Apply same ranking to both base graph and outliers graph"
+          ],
+          "key_insight": "NEVER re-smooth a subset of data points. Always compute full smooth series first, then extract marker positions from it",
+          "file": "main.py lines 43-330"
+        },
+        "outlier_detection_confirmed": {
+          "scan_base_outliers": "Returns NATIONAL-level outliers only (aggregated across all DMAs)",
+          "columns": [
+            "the_date",
+            "winner",
+            "nat_z_score",
+            "impact",
+            "nat_total_wins",
+            "nat_mu_wins",
+            "nat_share_current",
+            "n_periods",
+            "selected_window",
+            "day_of_week"
+          ],
+          "test_results": {
+            "date_range": "2025-06-01 to 2025-06-30",
+            "outliers_found": 66,
+            "unique_dates": 22,
+            "unique_winners": 33,
+            "total_impact": 962
+          },
+          "note": "User confusion was about display, not calculation. Outliers ARE national, just displayed incorrectly"
+        },
+        "color_ranking_standard": {
+          "rule": "Always rank carriers by total wins (descending) before assigning colors",
+          "method": "carrier_totals = df.groupby('winner')['total_wins'].sum().sort_values(ascending=False)",
+          "palette": "px.colors.qualitative.Dark24 (consistent across dashboards)",
+          "applies_to": [
+            "base graph",
+            "outliers graph",
+            "suppression previews"
+          ]
+        }
+      }
+    }
+  ]
 }
