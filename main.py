@@ -347,7 +347,42 @@ def ui():
     # Show cached outliers if available
     base_outliers = st.session_state.get('base_outliers')
     if base_outliers is not None and not base_outliers.empty:
-        st.info(f'📌 {len(base_outliers)} outliers loaded from previous scan')
+        st.info(f'📌 {len(base_outliers)} outliers detected for {len(base_outliers["winner"].unique())} carriers')
+        
+        # National Outliers Summary Table
+        with st.expander('📋 National Outliers Summary', expanded=True):
+            summary = base_outliers.groupby('winner').agg({
+                'the_date': 'count',
+                'impact': ['sum', 'mean', 'max'],
+                'nat_total_wins': 'sum',
+                'nat_z_score': lambda x: f"{x.abs().mean():.2f}"
+            }).reset_index()
+            
+            summary.columns = ['Carrier', 'Outlier Days', 'Total Impact', 'Avg Impact', 'Max Impact', 'Total Wins', 'Avg |Z-Score|']
+            summary = summary.sort_values('Total Impact', ascending=False)
+            
+            # Format for display
+            summary['Total Impact'] = summary['Total Impact'].astype(int)
+            summary['Avg Impact'] = summary['Avg Impact'].round(1)
+            summary['Max Impact'] = summary['Max Impact'].astype(int)
+            summary['Total Wins'] = summary['Total Wins'].astype(int)
+            
+            st.dataframe(
+                summary,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    'Carrier': st.column_config.TextColumn('Carrier', width='medium'),
+                    'Outlier Days': st.column_config.NumberColumn('Outlier Days', format='%d'),
+                    'Total Impact': st.column_config.NumberColumn('Total Impact', format='%d', help='Sum of excess wins'),
+                    'Avg Impact': st.column_config.NumberColumn('Avg Impact', format='%.1f'),
+                    'Max Impact': st.column_config.NumberColumn('Max Impact', format='%d'),
+                    'Total Wins': st.column_config.NumberColumn('Total Wins', format='%d'),
+                    'Avg |Z-Score|': st.column_config.TextColumn('Avg |Z-Score|', width='small')
+                }
+            )
+            
+            st.caption(f'Showing all {len(summary)} carriers with detected outliers. Click "Build Plan" to generate suppression strategy.')
     else:
         st.caption('No outliers scanned yet. Click "Scan for Outliers" to begin.')
 
@@ -614,9 +649,29 @@ def ui():
                                 # Display carriers that didn't meet distribution threshold
                                 if insufficient_threshold_cases:
                                     st.warning(f'⚠️ {len(insufficient_threshold_cases)} carrier-date combinations could not fully distribute (all pairs < {distributed_min_wins} wins)')
-                                    with st.expander('Show Carriers Not Meeting Distribution Threshold'):
+                                    with st.expander('📊 Carriers Not Meeting Distribution Threshold', expanded=True):
                                         insufficient_df = pd.DataFrame(insufficient_threshold_cases)
-                                        st.dataframe(insufficient_df, width='stretch')
+                                        
+                                        # Aggregate by carrier to show total unaddressed impact
+                                        carrier_summary = insufficient_df.groupby('winner').agg({
+                                            'date': 'count',
+                                            'need_remaining': 'sum',
+                                            'auto_removed': 'sum'
+                                        }).reset_index()
+                                        carrier_summary.columns = ['Carrier', 'Dates Affected', 'Total Unaddressed Impact', 'Total Auto-Removed']
+                                        carrier_summary = carrier_summary.sort_values('Total Unaddressed Impact', ascending=False)
+                                        
+                                        st.markdown('**Summary by Carrier:**')
+                                        st.dataframe(carrier_summary, use_container_width=True, hide_index=True)
+                                        
+                                        st.markdown('**Details by Date:**')
+                                        st.dataframe(
+                                            insufficient_df[['date', 'winner', 'need_remaining', 'auto_removed', 'min_wins_required', 'reason']],
+                                            use_container_width=True,
+                                            hide_index=True
+                                        )
+                                        
+                                        st.info(f'💡 Tip: Lower "Min Wins for Distribution" threshold to {max(1, distributed_min_wins // 2)} to address these cases')
                             else:
                                 st.warning('⚠️  No suppression plan rows were generated from the outliers.')
             except Exception as e:
