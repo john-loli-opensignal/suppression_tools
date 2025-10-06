@@ -160,12 +160,13 @@
     }
   },
   "main_py_restoration": {
-    "status": "IN PROGRESS - Phase 1 complete",
+    "status": "COMPLETE - Phase 2 finished",
     "plan_location": "analysis/main_py_restoration_plan.md",
     "summary_location": "analysis/restoration_summary.md",
     "approach": "Phase-by-phase with validation at each step",
     "estimated_hours": 13,
     "phase_1_complete": true,
+    "phase_2_complete": true,
     "decisions_made": {
       "z_score_thresholds": "UI sliders with defaults (nat: 2.5, dma: 1.5)",
       "egregious_threshold": "Impact > 40 (national level)",
