@@ -808,8 +808,13 @@ def main():
             else:
                 st.metric("Selected Carriers", len(st.session_state.selected_carriers))
         else:
-            st.write(f"Primary: {st.session_state.primary_carrier or 'None'}")
-            st.write(f"Competitors: {', '.join(st.session_state.competitor_carrier) if st.session_state.competitor_carrier else 'None'}")
+            st.write(f"**Primary:** {st.session_state.primary_carrier or 'None'}")
+            st.write("**Competitors:**")
+            if st.session_state.competitor_carrier:
+                for comp in st.session_state.competitor_carrier:
+                    st.write(f"- {comp}")
+            else:
+                st.write("- None")
 
     # Outliers table - FULL WIDTH UNDER THE GRAPH
     try:
