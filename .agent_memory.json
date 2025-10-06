@@ -187,7 +187,9 @@
     "temp_files_in_root": "ALWAYS use analysis/ subdirectories",
     "dow_confusion": "DuckDB DAYOFWEEK: 1=Sunday, strftime('%w'): 0=Sunday",
     "missing_assertion": "ALWAYS assert db_path before connection",
-    "csv_only": "Save to BOTH database AND CSV for compatibility"
+    "csv_only": "Save to BOTH database AND CSV for compatibility",
+    "nan_to_integer": "ALWAYS check for NULL/NaN before CAST(...AS INTEGER) - use CASE WHEN ... IS NOT NULL",
+    "rolling_metrics_null": "Early dates have NULL rolling metrics - handle gracefully with COALESCE or NULL checks"
   },
   "git_workflow": {
     "branch": "codex-agent",

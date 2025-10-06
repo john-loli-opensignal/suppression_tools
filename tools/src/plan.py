@@ -193,8 +193,8 @@ def scan_base_outliers(
                     ELSE 0 
                 END as nat_z_score,
                 CASE 
-                    WHEN nat_mu_wins IS NOT NULL THEN 
-                        CAST(nat_total_wins - nat_mu_wins AS INTEGER)
+                    WHEN nat_mu_wins IS NOT NULL AND nat_mu_wins > 0 THEN 
+                        CAST(ROUND(nat_total_wins - nat_mu_wins) AS INTEGER)
                     ELSE 0
                 END as impact
             FROM with_rolling
@@ -335,8 +335,8 @@ def build_enriched_cube(
             END as nat_z_score,
             -- Impact (excess over baseline)
             CASE 
-                WHEN n.nat_mu_wins IS NOT NULL THEN 
-                    CAST(n.nat_total_wins - n.nat_mu_wins AS INTEGER)
+                WHEN n.nat_mu_wins IS NOT NULL AND n.nat_mu_wins > 0 THEN 
+                    CAST(ROUND(n.nat_total_wins - n.nat_mu_wins) AS INTEGER)
                 ELSE 0
             END as impact
         FROM pair_level p
