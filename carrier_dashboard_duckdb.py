@@ -616,10 +616,26 @@ def main():
         dmin, dmax = get_date_bounds(db_path, st.session_state.filters)
     except Exception:
         dmin, dmax = (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
+    
+    # Initialize or clamp session state values to valid range
     if 'graph_start' not in st.session_state or not st.session_state.get('graph_start'):
         st.session_state.graph_start = dmin
+    else:
+        # Clamp to valid range if outside bounds
+        if st.session_state.graph_start < dmin:
+            st.session_state.graph_start = dmin
+        elif st.session_state.graph_start > dmax:
+            st.session_state.graph_start = dmax
+    
     if 'graph_end' not in st.session_state or not st.session_state.get('graph_end'):
         st.session_state.graph_end = dmax
+    else:
+        # Clamp to valid range if outside bounds
+        if st.session_state.graph_end < dmin:
+            st.session_state.graph_end = dmin
+        elif st.session_state.graph_end > dmax:
+            st.session_state.graph_end = dmax
+    
     st.session_state.graph_start = st.sidebar.date_input("Start date", value=st.session_state.graph_start, min_value=dmin, max_value=dmax)
     st.session_state.graph_end = st.sidebar.date_input("End date", value=st.session_state.graph_end, min_value=dmin, max_value=dmax)
     if st.session_state.graph_start > st.session_state.graph_end:
