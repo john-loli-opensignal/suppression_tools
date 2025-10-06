@@ -1,8 +1,9 @@
 """Plan building and outlier detection using database cubes."""
 from typing import List, Optional
 import pandas as pd
+import os
 import sys
-sys.path.insert(0, '/home/jloli/codebase-comparison/suppression_tools')
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import tools.db as db
 
 
@@ -24,7 +25,7 @@ def get_top_n_carriers(
         List of carrier names
     """
     if db_path is None:
-        db_path = db.get_db_path()
+        db_path = db.get_default_db_path()
     
     # Assert correct database path
     assert db_path.endswith('data/databases/duck_suppression.db'), \
@@ -65,7 +66,7 @@ def base_national_series(
         DataFrame with columns: the_date, winner, total_wins, market_total, win_share
     """
     if db_path is None:
-        db_path = db.get_db_path()
+        db_path = db.get_default_db_path()
     
     # Assert correct database path
     assert db_path.endswith('data/databases/duck_suppression.db'), \
@@ -77,17 +78,32 @@ def base_national_series(
     winners_str = ','.join([f"'{w}'" for w in winners]) if winners else "''"
     
     sql = f"""
+        WITH agg AS (
+            SELECT 
+                the_date,
+                winner,
+                SUM(total_wins) as total_wins
+            FROM {cube_table}
+            WHERE the_date BETWEEN '{start_date}' AND '{end_date}'
+                AND winner IN ({winners_str})
+            GROUP BY the_date, winner
+        ),
+        market AS (
+            SELECT 
+                the_date,
+                SUM(total_wins) as market_total
+            FROM agg
+            GROUP BY the_date
+        )
         SELECT 
-            the_date,
-            winner,
-            SUM(total_wins) as total_wins,
-            SUM(SUM(total_wins)) OVER (PARTITION BY the_date) as market_total,
-            SUM(total_wins) / NULLIF(SUM(SUM(total_wins)) OVER (PARTITION BY the_date), 0) as win_share
-        FROM {cube_table}
-        WHERE the_date BETWEEN '{start_date}' AND '{end_date}'
-            AND winner IN ({winners_str})
-        GROUP BY the_date, winner
-        ORDER BY the_date, winner
+            a.the_date,
+            a.winner,
+            a.total_wins,
+            m.market_total,
+            a.total_wins * 1.0 / NULLIF(m.market_total, 0) as win_share
+        FROM agg a
+        JOIN market m ON a.the_date = m.the_date
+        ORDER BY a.the_date, a.winner
     """
     return db.query(sql, db_path)
 
@@ -120,7 +136,7 @@ def scan_base_outliers(
         DataFrame with columns: the_date, winner, nat_z_score, impact
     """
     if db_path is None:
-        db_path = db.get_db_path()
+        db_path = db.get_default_db_path()
     
     # Assert correct database path
     assert db_path.endswith('data/databases/duck_suppression.db'), \
@@ -208,6 +224,7 @@ def build_enriched_cube(
     """Build enriched cube with all metrics needed for UI plan building.
     
     Returns pair-level data with national context for specified date range.
+    Uses the pre-computed rolling views for efficiency.
     
     Args:
         ds: Dataset name
@@ -220,7 +237,7 @@ def build_enriched_cube(
         DataFrame with all pair-level and national-level metrics
     """
     if db_path is None:
-        db_path = db.get_db_path()
+        db_path = db.get_default_db_path()
     
     # Assert correct database path
     assert db_path.endswith('data/databases/duck_suppression.db'), \
@@ -232,6 +249,7 @@ def build_enriched_cube(
         WITH pair_level AS (
             SELECT 
                 the_date,
+                day_of_week,
                 winner,
                 loser,
                 dma_name,
@@ -250,17 +268,32 @@ def build_enriched_cube(
             WHERE the_date BETWEEN '{start_date}' AND '{end_date}'
                 AND total_wins >= 5  -- Minimum volume filter
         ),
-        national_agg AS (
+        national_daily AS (
             SELECT
                 the_date,
+                day_of_week,
                 winner,
-                SUM(pair_wins_current) as nat_total_wins,
-                SUM(SUM(pair_wins_current)) OVER (PARTITION BY the_date) as nat_market_wins,
-                SUM(pair_wins_current) / NULLIF(
-                    SUM(SUM(pair_wins_current)) OVER (PARTITION BY the_date), 0
-                ) as nat_share_current
+                SUM(pair_wins_current) as nat_total_wins
             FROM pair_level
-            GROUP BY the_date, winner
+            GROUP BY the_date, day_of_week, winner
+        ),
+        market_daily AS (
+            SELECT
+                the_date,
+                SUM(nat_total_wins) as nat_market_wins
+            FROM national_daily
+            GROUP BY the_date
+        ),
+        national_with_share AS (
+            SELECT 
+                n.the_date,
+                n.day_of_week,
+                n.winner,
+                n.nat_total_wins,
+                m.nat_market_wins,
+                n.nat_total_wins * 1.0 / NULLIF(m.nat_market_wins, 0) as nat_share_current
+            FROM national_daily n
+            JOIN market_daily m ON n.the_date = m.the_date
         ),
         national_rolling AS (
             SELECT 
@@ -269,28 +302,17 @@ def build_enriched_cube(
                 nat_total_wins,
                 nat_market_wins,
                 nat_share_current,
-                -- DOW-partitioned rolling metrics
-                AVG(nat_total_wins) OVER (
-                    PARTITION BY winner, EXTRACT(DOW FROM the_date)
-                    ORDER BY the_date
-                    ROWS BETWEEN 13 PRECEDING AND 1 PRECEDING
-                ) as nat_mu_wins,
-                STDDEV(nat_total_wins) OVER (
-                    PARTITION BY winner, EXTRACT(DOW FROM the_date)
-                    ORDER BY the_date
-                    ROWS BETWEEN 13 PRECEDING AND 1 PRECEDING
-                ) as nat_sigma_wins,
-                AVG(nat_share_current) OVER (
-                    PARTITION BY winner, EXTRACT(DOW FROM the_date)
-                    ORDER BY the_date
-                    ROWS BETWEEN 13 PRECEDING AND 1 PRECEDING
-                ) as nat_mu_share,
-                STDDEV(nat_share_current) OVER (
-                    PARTITION BY winner, EXTRACT(DOW FROM the_date)
-                    ORDER BY the_date
-                    ROWS BETWEEN 13 PRECEDING AND 1 PRECEDING
-                ) as nat_sigma_share
-            FROM national_agg
+                -- DOW-partitioned rolling metrics using ROWS window
+                AVG(nat_total_wins) OVER w as nat_mu_wins,
+                STDDEV(nat_total_wins) OVER w as nat_sigma_wins,
+                AVG(nat_share_current) OVER w as nat_mu_share,
+                STDDEV(nat_share_current) OVER w as nat_sigma_share
+            FROM national_with_share
+            WINDOW w AS (
+                PARTITION BY winner, day_of_week
+                ORDER BY the_date
+                ROWS BETWEEN 13 PRECEDING AND 1 PRECEDING
+            )
         )
         SELECT 
             p.*,
@@ -308,10 +330,10 @@ def build_enriched_cube(
                 ELSE 0 
             END as nat_z_score,
             -- Impact (excess over baseline)
-            CAST(n.nat_total_wins - n.nat_mu_wins AS INTEGER) as impact
+            CAST(n.nat_total_wins - COALESCE(n.nat_mu_wins, 0) AS INTEGER) as impact
         FROM pair_level p
-        JOIN national_rolling n USING (the_date, winner)
-        ORDER BY the_date, winner, dma_name, loser
+        JOIN national_rolling n ON p.the_date = n.the_date AND p.winner = n.winner
+        ORDER BY p.the_date, p.winner, p.dma_name, p.loser
     """
     return db.query(sql, db_path)
 
