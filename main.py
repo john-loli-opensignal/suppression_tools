@@ -333,7 +333,7 @@ def ui():
                         legend=dict(orientation='v', x=1.02, y=0.5),
                         margin=dict(l=40, r=200, t=80, b=40)
                     )
-                    st.plotly_chart(fig, use_container_width=False, config={'displayModeBar': False})
+                    st.plotly_chart(fig, width='content')
                 except Exception as e:
                     st.error(f'Failed to create graph: {e}')
                     import traceback
@@ -387,6 +387,7 @@ def ui():
                         else:
                             # Build suppression plan using your distribution algorithm
                             plan_rows = []
+                            insufficient_threshold_cases = []  # Track carriers that couldn't meet distribution threshold
                             
                             for (the_date, winner), sub in enriched_outliers.groupby(['the_date', 'winner']):
                                 # Calculate removal need (excess over baseline)
@@ -469,7 +470,15 @@ def ui():
                                     
                                     # Check if we have eligible pairs to distribute to
                                     if m == 0:
-                                        st.warning(f'⚠️ No eligible pairs for distribution on {the_date} for {winner} (need {distributed_min_wins}+ wins)')
+                                        # Track this case for reporting
+                                        insufficient_threshold_cases.append({
+                                            'date': pd.to_datetime(the_date).date(),
+                                            'winner': winner,
+                                            'need_remaining': need_remaining,
+                                            'auto_removed': auto_removed,
+                                            'min_wins_required': distributed_min_wins,
+                                            'reason': f'All pairs have < {distributed_min_wins} wins'
+                                        })
                                         distributed_final = pd.DataFrame()
                                     else:
                                         base_per_pair = need_remaining // m
@@ -601,6 +610,13 @@ def ui():
                                 
                                 st.dataframe(display_plan, width='stretch')
                                 st.success('✅ Suppression plan generated successfully!')
+                                
+                                # Display carriers that didn't meet distribution threshold
+                                if insufficient_threshold_cases:
+                                    st.warning(f'⚠️ {len(insufficient_threshold_cases)} carrier-date combinations could not fully distribute (all pairs < {distributed_min_wins} wins)')
+                                    with st.expander('Show Carriers Not Meeting Distribution Threshold'):
+                                        insufficient_df = pd.DataFrame(insufficient_threshold_cases)
+                                        st.dataframe(insufficient_df, width='stretch')
                             else:
                                 st.warning('⚠️  No suppression plan rows were generated from the outliers.')
             except Exception as e:
@@ -866,7 +882,7 @@ def ui():
                             margin=dict(l=40, r=250, t=100, b=40)
                         )
                         
-                        st.plotly_chart(fig, use_container_width=False, config={'displayModeBar': False})
+                        st.plotly_chart(fig, width='content')
                         
                         # Show summary stats
                         total_base = base_series.groupby('winner')['total_wins'].sum()
@@ -882,13 +898,13 @@ def ui():
                             'Base Wins': total_base.values,
                             'Removed': total_removed.values,
                             'Wins after Suppression': total_suppressed.values,
-                            'old %': (total_base / market_base * 100).round(2),
-                            'removed %': (total_removed / total_base * 100).round(2),
-                            'new %': (total_suppressed / market_suppressed * 100).round(2)
-                        }).sort_values('Removed', ascending=False)
+                            'Old %': (total_base / market_base * 100).round(2).values,
+                            'Removed %': (total_removed / total_base * 100).round(2).values,
+                            'New %': (total_suppressed / market_suppressed * 100).round(2).values
+                        }).sort_values('Removed', ascending=False).reset_index(drop=True)
                         
                         st.subheader('Suppression Summary')
-                        st.dataframe(summary, use_container_width=True)
+                        st.dataframe(summary, width='stretch')
                         st.success('✅ Preview generated! Solid lines = base, dashed lines = suppressed (click legend to toggle)')
                         
             except Exception as e:
