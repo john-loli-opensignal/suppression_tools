@@ -19,6 +19,8 @@ def init_session_state():
         st.session_state.analysis_mode = "National"
     if 'metric' not in st.session_state:
         st.session_state.metric = "win_share"
+    if 'display_mode' not in st.session_state:
+        st.session_state.display_mode = "share"  # 'share' or 'volume'
     if 'selection_mode' not in st.session_state:
         st.session_state.selection_mode = "Top N Carriers"
     if 'top_n' not in st.session_state:
@@ -86,6 +88,7 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
     smoothing_on = st.session_state.get('smoothing', True)
     show_markers = st.session_state.get('show_markers', False)
     stacked = st.session_state.get('stacked', False)
+    display_mode = st.session_state.get('display_mode', 'share')
 
     fig = go.Figure()
     for i, carrier in enumerate(carriers):
@@ -103,9 +106,28 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
         else:
             smooth = series
 
-        raw_vals = series.round(6).astype(str)
-        smooth_vals = smooth.round(6).astype(str)
-        hover_text = [f"{carrier}<br>{d.date()}<br>raw: {r}<br>smoothed: {s}" for d, r, s in zip(dates, raw_vals, smooth_vals)]
+        # Build enhanced hover text with volume breakdown
+        hover_text = []
+        for idx, (d, r, s) in enumerate(zip(dates, series, smooth)):
+            row_idx = cdf.index[idx]
+            hover_parts = [f"<b>{carrier}</b>", f"Date: {d.date()}"]
+            
+            # For wins_per_loss, show actual wins and losses in tooltip
+            if metric == 'wins_per_loss' and 'raw_wins' in cdf.columns and 'raw_losses' in cdf.columns:
+                raw_w = int(cdf.loc[row_idx, 'raw_wins']) if pd.notna(cdf.loc[row_idx, 'raw_wins']) else 0
+                raw_l = int(cdf.loc[row_idx, 'raw_losses']) if pd.notna(cdf.loc[row_idx, 'raw_losses']) else 0
+                hover_parts.append(f"Wins: {raw_w:,}")
+                hover_parts.append(f"Losses: {raw_l:,}")
+                hover_parts.append(f"Ratio: {r:.3f}")
+                if smoothing_on:
+                    hover_parts.append(f"Smoothed: {s:.3f}")
+            else:
+                # Standard display
+                hover_parts.append(f"Value: {r:.6f}")
+                if smoothing_on:
+                    hover_parts.append(f"Smoothed: {s:.6f}")
+            
+            hover_text.append("<br>".join(hover_parts))
 
         line_kwargs = dict(color='black', width=2) if carrier == 'Other' else dict(color=color_map.get(carrier, palette[i % len(palette)]), width=2)
         if carrier == 'Other':
@@ -180,13 +202,25 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
         title = f"{title_base} Over Time"
     if active_filters:
         title += f" ({', '.join(active_filters)})"
+    
+    # Update y-axis title based on display mode
+    if display_mode == 'volume':
+        if 'win' in metric:
+            yaxis_title = "Wins (Volume)"
+        elif 'loss' in metric:
+            yaxis_title = "Losses (Volume)"
+        else:
+            yaxis_title = metric.replace('_', ' ').title()
+    else:
+        yaxis_title = metric.replace('_', ' ').title()
+    
     fig.update_layout(
         title=dict(text=title, x=0.01, xanchor='left'),
         xaxis_title='Date',
-        yaxis_title=metric.replace('_', ' ').title(),
+        yaxis_title=yaxis_title,
         legend=dict(orientation='v', x=1.02, y=0.5),
         autosize=True,
-        width=1100,
+        width=1200,
         height=650,
         margin=dict(l=40, r=200, t=80, b=40)
     )
@@ -363,6 +397,12 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
         pdf['is_outlier'] = False
         pdf['zscore'] = 0
     
+    # Add raw_wins and raw_losses columns for tooltips (for wins_per_loss metric)
+    if 'total_wins' in pdf.columns:
+        pdf['raw_wins'] = pdf['total_wins']
+    if 'total_losses' in pdf.columns:
+        pdf['raw_losses'] = pdf['total_losses']
+    
     # Filter to selected winners
     pdf = pdf[pdf['winner'].isin(selected_winners)].copy()
     
@@ -377,6 +417,11 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
                 other_agg['winner'] = 'Other'
                 other_agg['is_outlier'] = False
                 other_agg['zscore'] = 0
+                # Add raw wins/losses for Other as well
+                if 'total_wins' in other_data.columns:
+                    other_agg['raw_wins'] = other_data.groupby('the_date')['total_wins'].sum().values
+                if 'total_losses' in other_data.columns:
+                    other_agg['raw_losses'] = other_data.groupby('the_date')['total_losses'].sum().values
                 pdf = pd.concat([pdf, other_agg], ignore_index=True)
     
     return pdf
@@ -408,6 +453,10 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
     
     if base.empty:
         return pd.DataFrame(columns=["the_date", "competitor", metric])
+    
+    # Store raw wins and losses for tooltips
+    base['raw_wins'] = base['h2h_wins']
+    base['raw_losses'] = base['h2h_losses']
     
     # Calculate metric
     if metric == 'win_share':
@@ -451,78 +500,6 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
     
     return pdf
 
-    base = _metrics.national_timeseries(db_path, _ds, _mover_ind, start_date, end_date, state=_state, dma_name=_dma)
-    if base.empty:
-        return pd.DataFrame(columns=["the_date", "winner", metric])
-    keep = base[['the_date', 'winner', metric]].copy()
-    keep = keep[keep['winner'].isin(selected_winners)]
-
-    outs = _outliers.national_outliers(db_path, _ds, _mover_ind, start_date, end_date, window, z_thresh, state=_state, dma_name=_dma, metric=metric)
-    if not outs.empty:
-        keep = keep.merge(
-            outs[['the_date', 'winner', 'z', 'nat_outlier_pos']].rename(columns={'z': 'zscore', 'nat_outlier_pos': 'is_outlier'}),
-            on=['the_date', 'winner'], how='left')
-        keep['is_outlier'] = keep['is_outlier'].fillna(False)
-        keep['zscore'] = keep['zscore'].fillna(0.0)
-    else:
-        keep['is_outlier'] = False
-        keep['zscore'] = 0.0
-    keep['day_type'] = pd.to_datetime(keep['the_date']).dt.dayofweek.map(lambda x: 'Sat' if x == 6 else ('Sun' if x == 0 else 'Weekday'))
-
-    if show_other:
-        all_df = base[['the_date', 'winner', metric]].copy()
-        other = all_df[~all_df['winner'].isin(selected_winners)].groupby('the_date', as_index=False)[metric].sum()
-        if not other.empty:
-            other['winner'] = 'Other'
-            other['zscore'] = 0.0
-            other['is_outlier'] = False
-            other['day_type'] = pd.to_datetime(other['the_date']).dt.dayofweek.map(lambda x: 'Sat' if x == 6 else ('Sun' if x == 0 else 'Weekday'))
-            keep = pd.concat([keep, other[['the_date', 'winner', metric, 'day_type', 'zscore', 'is_outlier']]], ignore_index=True)
-
-    return keep[['the_date', 'winner', metric, 'day_type', 'zscore', 'is_outlier']].sort_values(['the_date', 'winner'])
-
-
-@st.cache_data
-def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
-    # Defensive local import to avoid Streamlit cache scope issues
-    from tools.src import metrics as _metrics
-    if not primary or not competitors:
-        return pd.DataFrame(columns=["the_date", "winner", metric])
-
-    _ds = filters.get('ds', 'gamoshi')
-    _mover_ind = filters.get('mover_ind', 'False')
-    _state = filters.get('state') if filters else None
-    _dma = filters.get('dma_name') if filters else None
-
-    base = _metrics.competitor_view(_ds, _mover_ind, start_date, end_date, primary, competitors, state=_state, dma_name=_dma, db_path=db_path)
-    if base.empty:
-        return pd.DataFrame(columns=["the_date", "winner", metric])
-
-    df = base.copy()
-    if metric == 'win_share':
-        df[metric] = df['h2h_wins'] / df['primary_total_wins'].replace(0, pd.NA)
-    elif metric == 'loss_share':
-        df[metric] = df['h2h_losses'] / df['primary_total_losses'].replace(0, pd.NA)
-    else:
-        df[metric] = df['h2h_wins'] / df['h2h_losses'].replace(0, pd.NA)
-
-    df = df.rename(columns={'competitor': 'winner'})[['the_date', 'winner', metric]].copy()
-    df['the_date'] = pd.to_datetime(df['the_date'])
-    df['day_type'] = df['the_date'].dt.dayofweek.map(lambda x: 'Sat' if x == 6 else ('Sun' if x == 0 else 'Weekday'))
-
-    def _z_for_group(g):
-        s = g[metric]
-        win = max(2, int(window) - 1)
-        mu = s.shift(1).rolling(window=win, min_periods=2).mean()
-        sigma = s.shift(1).rolling(window=win, min_periods=2).std(ddof=1)
-        z = (s - mu) / sigma.replace({0: pd.NA})
-        return z.fillna(0.0)
-
-    df = df.sort_values(['winner', 'day_type', 'the_date'])
-    df['zscore'] = df.groupby(['winner', 'day_type'], as_index=False, group_keys=False).apply(_z_for_group)
-    df['is_outlier'] = df['zscore'] > float(z_thresh)
-    return df[['the_date', 'winner', metric, 'day_type', 'zscore', 'is_outlier']].sort_values(['the_date', 'winner'])
-
 
 def main():
     st.set_page_config(page_title="Carrier Win/Loss Share (DuckDB)", page_icon="🦆", layout="wide")
@@ -550,103 +527,111 @@ def main():
     metric_options = ["win_share", "loss_share", "wins_per_loss"]
     metric_index = metric_options.index(st.session_state.metric) if st.session_state.metric in metric_options else 0
     st.session_state.metric = st.sidebar.selectbox("Select Metric", metric_options, index=metric_index, format_func=lambda x: x.replace('_', ' ').title())
+    
+    # Volume vs Share toggle
+    st.session_state.display_mode = st.sidebar.radio(
+        "Display Mode", 
+        ["share", "volume"], 
+        index=0 if st.session_state.display_mode == "share" else 1,
+        format_func=lambda x: "Share (%)" if x == "share" else "Volume (Count)",
+        help="Share shows percentage, Volume shows actual win/loss counts"
+    )
 
-    if st.session_state.analysis_mode == "National":
-        selection_modes = ["Top N Carriers", "Custom Selection"]
-        selection_index = selection_modes.index(st.session_state.selection_mode) if st.session_state.selection_mode in selection_modes else 0
-        st.session_state.selection_mode = st.sidebar.radio("Selection Mode", selection_modes, index=selection_index)
+    # Collapsible sections for better organization
+    with st.sidebar.expander("🎯 Carrier Selection", expanded=True):
+        if st.session_state.analysis_mode == "National":
+            selection_modes = ["Top N Carriers", "Custom Selection"]
+            selection_index = selection_modes.index(st.session_state.selection_mode) if st.session_state.selection_mode in selection_modes else 0
+            st.session_state.selection_mode = st.radio("Selection Mode", selection_modes, index=selection_index)
 
-        # Custom multi-select with search for carriers (preloaded from ranked list)
-        if st.session_state.selection_mode == "Custom Selection":
-            try:
-                carrier_options = get_ranked_winners(db_path, st.session_state.filters)
-            except Exception:
-                carrier_options = []
-            prev = st.session_state.selected_carriers if isinstance(st.session_state.selected_carriers, list) else []
-            default_sel = [c for c in prev if c in carrier_options]
-            st.session_state.selected_carriers = st.sidebar.multiselect(
-                "Select carriers",
-                options=carrier_options,
-                default=default_sel,
-                help="Type to search. Applies on RUN ANALYSIS."
-            )
-
-        st.session_state.show_other = st.sidebar.checkbox("Show 'Other' carriers", value=st.session_state.show_other)
-        st.session_state.stacked = st.sidebar.checkbox("Stacked (fill) view", value=st.session_state.stacked)
-        st.session_state.smoothing = st.sidebar.checkbox("Smoothing (rolling mean)", value=st.session_state.smoothing)
-        st.session_state.show_markers = st.sidebar.checkbox("Show markers", value=st.session_state.show_markers)
-        palette_options = ["Plotly", "D3", "G10", "Dark24", "Safe"]
-        st.session_state.palette = st.sidebar.selectbox("Color palette", options=palette_options, index=palette_options.index(st.session_state.palette) if st.session_state.palette in palette_options else 3)
-    else:
-        # competitor mode
-        # Primary / Competitors selection using ranked winners (filtered) for consistency with v2
-        ranked_options = []
-        try:
-            ranked_options = get_ranked_winners(db_path, st.session_state.filters)
-        except Exception:
+            # Custom multi-select with search for carriers (preloaded from ranked list)
+            if st.session_state.selection_mode == "Custom Selection":
+                try:
+                    carrier_options = get_ranked_winners(db_path, st.session_state.filters)
+                except Exception:
+                    carrier_options = []
+                prev = st.session_state.selected_carriers if isinstance(st.session_state.selected_carriers, list) else []
+                default_sel = [c for c in prev if c in carrier_options]
+                st.session_state.selected_carriers = st.multiselect(
+                    "Select carriers",
+                    options=carrier_options,
+                    default=default_sel,
+                    help="Type to search. Applies on RUN ANALYSIS."
+                )
+        else:
+            # competitor mode
+            # Primary / Competitors selection using ranked winners (filtered) for consistency with v2
             ranked_options = []
-        primary_index = ranked_options.index(st.session_state.primary_carrier) if st.session_state.primary_carrier in ranked_options else 0
-        st.session_state.primary_carrier = st.sidebar.selectbox("Select Primary Carrier", options=ranked_options, index=primary_index if primary_index < len(ranked_options) else 0)
-        prev_comp = st.session_state.competitor_carrier if isinstance(st.session_state.competitor_carrier, list) else []
-        default_comp = [c for c in prev_comp if c in ranked_options]
-        st.session_state.competitor_carrier = st.sidebar.multiselect("Select Competitors (can select multiple)", options=ranked_options, default=default_comp)
+            try:
+                ranked_options = get_ranked_winners(db_path, st.session_state.filters)
+            except Exception:
+                ranked_options = []
+            primary_index = ranked_options.index(st.session_state.primary_carrier) if st.session_state.primary_carrier in ranked_options else 0
+            st.session_state.primary_carrier = st.selectbox("Select Primary Carrier", options=ranked_options, index=primary_index if primary_index < len(ranked_options) else 0)
+            prev_comp = st.session_state.competitor_carrier if isinstance(st.session_state.competitor_carrier, list) else []
+            default_comp = [c for c in prev_comp if c in ranked_options]
+            st.session_state.competitor_carrier = st.multiselect("Select Competitors (can select multiple)", options=ranked_options, default=default_comp)
 
-        st.session_state.smoothing = st.sidebar.checkbox("Smoothing (rolling mean)", value=st.session_state.smoothing)
-        st.session_state.show_markers = st.sidebar.checkbox("Show markers", value=st.session_state.show_markers)
+    with st.sidebar.expander("🎨 Display Settings"):
+        if st.session_state.analysis_mode == "National":
+            st.session_state.show_other = st.checkbox("Show 'Other' carriers", value=st.session_state.show_other)
+            st.session_state.stacked = st.checkbox("Stacked (fill) view", value=st.session_state.stacked)
+        st.session_state.smoothing = st.checkbox("Smoothing (rolling mean)", value=st.session_state.smoothing)
+        st.session_state.show_markers = st.checkbox("Show markers", value=st.session_state.show_markers)
         palette_options = ["Plotly", "D3", "G10", "Dark24", "Safe"]
-        st.session_state.palette = st.sidebar.selectbox("Color palette", options=palette_options, index=palette_options.index(st.session_state.palette) if st.session_state.palette in palette_options else 3)
+        st.session_state.palette = st.selectbox("Color palette", options=palette_options, index=palette_options.index(st.session_state.palette) if st.session_state.palette in palette_options else 3)
 
     # Filters
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🔧 Filters")
-    filter_columns = ['mover_ind', 'ds', 'state', 'dma_name']
-    for col in filter_columns:
-        try:
-            options = get_distinct_options(db_path, col)
-        except Exception:
-            options = ["All"]
-        current_value = st.session_state.filters.get(col, "All")
-        if current_value not in options:
-            current_value = "All"
-        st.session_state.filters[col] = st.sidebar.selectbox(f"Filter by {col}", options=options, index=options.index(current_value))
+    with st.sidebar.expander("🔧 Filters", expanded=True):
+        filter_columns = ['mover_ind', 'ds', 'state', 'dma_name']
+        for col in filter_columns:
+            try:
+                options = get_distinct_options(db_path, col)
+            except Exception:
+                options = ["All"]
+            current_value = st.session_state.filters.get(col, "All")
+            if current_value not in options:
+                current_value = "All"
+            st.session_state.filters[col] = st.selectbox(f"{col}", options=options, index=options.index(current_value), help=f"Filter data by {col}")
 
     # Graph Window (date range)
-    st.sidebar.subheader("🗓️ Graph Window")
-    try:
-        dmin, dmax = get_date_bounds(db_path, st.session_state.filters)
-    except Exception:
-        dmin, dmax = (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
-    
-    # Initialize or clamp session state values to valid range
-    if 'graph_start' not in st.session_state or not st.session_state.get('graph_start'):
-        st.session_state.graph_start = dmin
-    else:
-        # Clamp to valid range if outside bounds
-        if st.session_state.graph_start < dmin:
+    with st.sidebar.expander("🗓️ Graph Window"):
+        try:
+            dmin, dmax = get_date_bounds(db_path, st.session_state.filters)
+        except Exception:
+            dmin, dmax = (pd.to_datetime('1970-01-01').date(), pd.to_datetime('1970-01-01').date())
+        
+        # Initialize or clamp session state values to valid range
+        if 'graph_start' not in st.session_state or not st.session_state.get('graph_start'):
             st.session_state.graph_start = dmin
-        elif st.session_state.graph_start > dmax:
-            st.session_state.graph_start = dmax
-    
-    if 'graph_end' not in st.session_state or not st.session_state.get('graph_end'):
-        st.session_state.graph_end = dmax
-    else:
-        # Clamp to valid range if outside bounds
-        if st.session_state.graph_end < dmin:
-            st.session_state.graph_end = dmin
-        elif st.session_state.graph_end > dmax:
+        else:
+            # Clamp to valid range if outside bounds
+            if st.session_state.graph_start < dmin:
+                st.session_state.graph_start = dmin
+            elif st.session_state.graph_start > dmax:
+                st.session_state.graph_start = dmax
+        
+        if 'graph_end' not in st.session_state or not st.session_state.get('graph_end'):
             st.session_state.graph_end = dmax
-    
-    st.session_state.graph_start = st.sidebar.date_input("Start date", value=st.session_state.graph_start, min_value=dmin, max_value=dmax)
-    st.session_state.graph_end = st.sidebar.date_input("End date", value=st.session_state.graph_end, min_value=dmin, max_value=dmax)
-    if st.session_state.graph_start > st.session_state.graph_end:
-        st.sidebar.error("Start date must be on or before End date.")
+        else:
+            # Clamp to valid range if outside bounds
+            if st.session_state.graph_end < dmin:
+                st.session_state.graph_end = dmin
+            elif st.session_state.graph_end > dmax:
+                st.session_state.graph_end = dmax
+        
+        st.session_state.graph_start = st.date_input("Start date", value=st.session_state.graph_start, min_value=dmin, max_value=dmax)
+        st.session_state.graph_end = st.date_input("End date", value=st.session_state.graph_end, min_value=dmin, max_value=dmax)
+        if st.session_state.graph_start > st.session_state.graph_end:
+            st.error("Start date must be on or before End date.")
 
+    # Outliers
+    with st.sidebar.expander("✨ Outliers"):
+        st.session_state.outlier_window = st.slider("Outlier window (days)", min_value=7, max_value=60, value=st.session_state.outlier_window, step=1, help="Rolling window size for outlier detection")
+        st.session_state.outlier_z = st.slider("Outlier z-score threshold", min_value=1.0, max_value=4.0, value=float(st.session_state.outlier_z), step=0.1, help="Z-score threshold for flagging outliers")
+        st.session_state.outlier_show = st.radio("Show outliers", options=["All", "Positive only"], index=0 if st.session_state.outlier_show == 'All' else 1, help="Filter outlier markers on chart")
+    
     # Run + Reset
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("✨ Outliers")
-    st.session_state.outlier_window = st.sidebar.slider("Outlier window (days)", min_value=7, max_value=60, value=st.session_state.outlier_window, step=1)
-    st.session_state.outlier_z = st.sidebar.slider("Outlier z-score threshold", min_value=1.0, max_value=4.0, value=float(st.session_state.outlier_z), step=0.1)
-    st.session_state.outlier_show = st.sidebar.radio("Show outliers", options=["All", "Positive only"], index=0 if st.session_state.outlier_show == 'All' else 1)
     st.sidebar.markdown("---")
     run_analysis = st.sidebar.button("🚀 RUN ANALYSIS", type="primary")
     
@@ -733,6 +718,7 @@ def main():
                 float(st.session_state.outlier_z),
                 str(st.session_state.graph_start),
                 str(st.session_state.graph_end),
+                st.session_state.display_mode,
             )
         except Exception:
             sig = None
@@ -740,25 +726,8 @@ def main():
 
     # Selection summary and plotting
     st.sidebar.markdown("---")
-    # Sidebar selection summary mirroring v2
-    if st.session_state.analysis_mode == "National":
-        st.sidebar.write(f"**Total Selected:** {st.session_state.top_n if st.session_state.selection_mode == 'Top N Carriers' else len(st.session_state.selected_carriers)} carriers")
-        try:
-            total_in_filtered = len(get_ranked_winners(db_path, st.session_state.filters))
-        except Exception:
-            total_in_filtered = 0
-        others = max(0, total_in_filtered - (st.session_state.top_n if st.session_state.selection_mode == 'Top N Carriers' else len(st.session_state.selected_carriers)))
-        st.sidebar.write(f"**Others Aggregated:** {others} carriers")
-    else:
-        if st.session_state.primary_carrier and st.session_state.competitor_carrier:
-            st.sidebar.write(f"**Matchup:** {st.session_state.primary_carrier} vs {', '.join(st.session_state.competitor_carrier)}")
-    if any(v not in (None, 'All') for v in st.session_state.filters.values()):
-        st.sidebar.write("**Active Filters:**")
-        for k, v in st.session_state.filters.items():
-            if v not in (None, 'All'):
-                st.sidebar.write(f"• {k} = {v}")
-    # Slightly narrower chart area compared to v2
-    col1, col2 = st.columns([2, 1])
+    # Updated layout: 12:1.5 ratio for graph vs summary (much wider graph)
+    col1, col2 = st.columns([12, 1.5])
     with col1:
         st.subheader(f"{st.session_state.metric.replace('_', ' ').title()} Over Time")
         # Use last computed dataset unless RUN ANALYSIS was clicked
@@ -793,6 +762,7 @@ def main():
             float(st.session_state.outlier_z),
             str(st.session_state.graph_start),
             str(st.session_state.graph_end),
+            st.session_state.display_mode,
         )
         if st.session_state.applied_signature and current_sig != st.session_state.applied_signature:
             st.info("Selections changed. Click RUN ANALYSIS to update the chart.")
@@ -800,21 +770,23 @@ def main():
         pass
 
     with col2:
-        st.subheader("📈 Summary")
+        # Compact summary panel with smaller font
+        st.markdown("<style>.small-font { font-size:11px; }</style>", unsafe_allow_html=True)
+        st.markdown("### 📈")
         if st.session_state.analysis_mode == "National":
             if st.session_state.selection_mode == "Top N Carriers":
                 ranked_filtered = get_ranked_winners(db_path, st.session_state.filters)
-                st.metric("Top N", min(st.session_state.top_n, len(ranked_filtered)))
+                st.markdown(f"<p class='small-font'><b>Top N:</b> {min(st.session_state.top_n, len(ranked_filtered))}</p>", unsafe_allow_html=True)
             else:
-                st.metric("Selected Carriers", len(st.session_state.selected_carriers))
+                st.markdown(f"<p class='small-font'><b>Selected:</b> {len(st.session_state.selected_carriers)}</p>", unsafe_allow_html=True)
         else:
-            st.write(f"**Primary:** {st.session_state.primary_carrier or 'None'}")
-            st.write("**Competitors:**")
+            st.markdown(f"<p class='small-font'><b>Primary:</b><br/>{st.session_state.primary_carrier or 'None'}</p>", unsafe_allow_html=True)
+            st.markdown("<p class='small-font'><b>Competitors:</b></p>", unsafe_allow_html=True)
             if st.session_state.competitor_carrier:
                 for comp in st.session_state.competitor_carrier:
-                    st.write(f"- {comp}")
+                    st.markdown(f"<p class='small-font'>• {comp}</p>", unsafe_allow_html=True)
             else:
-                st.write("- None")
+                st.markdown("<p class='small-font'>• None</p>", unsafe_allow_html=True)
 
     # Outliers table - FULL WIDTH UNDER THE GRAPH
     try:
@@ -828,22 +800,9 @@ def main():
                 out = out[cols].sort_values(['the_date', 'winner'], ascending=[True, False])
                 st.markdown("---")
                 st.markdown("**📊 Outliers (sorted by date, carrier desc)**")
-                st.dataframe(out.head(50), use_container_width=True)
+                st.dataframe(out.head(50), width='stretch')
     except Exception:
         pass
-
-    # Optional: Top N preview in sidebar like v2
-    if st.session_state.analysis_mode == "National" and st.session_state.selection_mode == "Top N Carriers":
-        try:
-            ranked_opts = get_ranked_winners(db_path, st.session_state.filters)
-        except Exception:
-            ranked_opts = []
-        if ranked_opts:
-            st.sidebar.write(f"**Top {min(st.session_state.top_n, len(ranked_opts))} Carriers:**")
-            for i, c in enumerate(ranked_opts[: st.session_state.top_n], 1):
-                st.sidebar.write(f"{i}. {c}")
-        else:
-            st.sidebar.write("Top carriers will be shown after you click RUN ANALYSIS.")
 
     # View Raw Data like v2
     with st.expander("📊 View Raw Data"):
