@@ -494,17 +494,19 @@ def ui():
                                 need_remaining = max(0, need - auto_removed)
                                 
                                 if need_remaining > 0:
-                                    # Distribute evenly across eligible pairs (minimum threshold)
-                                    all_pairs = sub[['loser', 'dma_name', 'pair_wins_current']].copy()
-                                    all_pairs['capacity'] = pd.to_numeric(all_pairs['pair_wins_current'], errors='coerce').fillna(0.0)
+                                    # FIXED: Distribute proportionally across DMAs, not pairs
+                                    # This ensures better coverage and avoids missing suppressions
                                     
-                                    # Filter to pairs meeting minimum threshold
-                                    all_pairs = all_pairs[all_pairs['capacity'] >= distributed_min_wins]
+                                    # Step 1: Aggregate to DMA level
+                                    dma_level = sub.groupby('dma_name').agg({
+                                        'pair_wins_current': 'sum'
+                                    }).reset_index()
+                                    dma_level.columns = ['dma_name', 'dma_wins']
                                     
-                                    m = len(all_pairs)
+                                    # Filter DMAs meeting minimum threshold
+                                    eligible_dmas = dma_level[dma_level['dma_wins'] >= distributed_min_wins]
                                     
-                                    # Check if we have eligible pairs to distribute to
-                                    if m == 0:
+                                    if len(eligible_dmas) == 0:
                                         # Track this case for reporting
                                         insufficient_threshold_cases.append({
                                             'date': pd.to_datetime(the_date).date(),
@@ -512,30 +514,39 @@ def ui():
                                             'need_remaining': need_remaining,
                                             'auto_removed': auto_removed,
                                             'min_wins_required': distributed_min_wins,
-                                            'reason': f'All pairs have < {distributed_min_wins} wins'
+                                            'reason': f'All DMAs have < {distributed_min_wins} wins'
                                         })
                                         distributed_final = pd.DataFrame()
                                     else:
-                                        base_per_pair = need_remaining // m
-                                        all_pairs['rm_base'] = np.minimum(all_pairs['capacity'], base_per_pair).astype(int)
+                                        # Step 2: Calculate proportional distribution across eligible DMAs
+                                        total_eligible = eligible_dmas['dma_wins'].sum()
+                                        eligible_dmas['proportion'] = eligible_dmas['dma_wins'] / total_eligible
+                                        eligible_dmas['dma_remove'] = (eligible_dmas['proportion'] * need_remaining).round().astype(int)
                                         
-                                        # Distribute remainder
-                                        distributed_so_far = int(all_pairs['rm_base'].sum())
-                                        remainder = max(0, need_remaining - distributed_so_far)
+                                        # Step 3: Distribute DMA-level suppressions to pairs proportionally within each DMA
+                                        all_pairs = []
+                                        for _, dma_row in eligible_dmas[eligible_dmas['dma_remove'] > 0].iterrows():
+                                            dma_name = dma_row['dma_name']
+                                            dma_remove = dma_row['dma_remove']
+                                            
+                                            # Get pairs for this DMA
+                                            dma_pairs = sub[sub['dma_name'] == dma_name][['loser', 'dma_name', 'pair_wins_current']].copy()
+                                            dma_pairs['capacity'] = pd.to_numeric(dma_pairs['pair_wins_current'], errors='coerce').fillna(0.0)
+                                            
+                                            # Distribute proportionally within DMA
+                                            dma_total = dma_pairs['capacity'].sum()
+                                            if dma_total > 0:
+                                                dma_pairs['proportion'] = dma_pairs['capacity'] / dma_total
+                                                dma_pairs['rm_final'] = (dma_pairs['proportion'] * dma_remove).round().astype(int)
+                                                
+                                                # Add to collection
+                                                all_pairs.append(dma_pairs[dma_pairs['rm_final'] > 0])
                                         
-                                        all_pairs['residual'] = (all_pairs['capacity'] - all_pairs['rm_base']).astype(int)
-                                        all_pairs = all_pairs.sort_values(
-                                            ['residual', 'capacity'],
-                                            ascending=[False, False]
-                                        ).reset_index(drop=True)
-                                        
-                                        all_pairs['extra'] = 0
-                                        if remainder > 0:
-                                            eligible_idx = all_pairs.index[all_pairs['residual'] > 0][:remainder]
-                                            all_pairs.loc[eligible_idx, 'extra'] = 1
-                                        
-                                        all_pairs['rm_final'] = (all_pairs['rm_base'] + all_pairs['extra']).astype(int)
-                                        distributed_final = all_pairs[all_pairs['rm_final'] > 0]
+                                        # Combine all pairs
+                                        if all_pairs:
+                                            distributed_final = pd.concat(all_pairs, ignore_index=True)
+                                        else:
+                                            distributed_final = pd.DataFrame()
                                 else:
                                     distributed_final = pd.DataFrame()
                                 
