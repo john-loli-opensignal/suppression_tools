@@ -675,6 +675,16 @@ def ui():
     st.subheader('5️⃣ Preview Before/After Comparison')
     st.caption('Apply suppressions in-memory and visualize the effect on national win share.')
     
+    # Toggle for display mode
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        show_mode = st.radio(
+            'Display Mode',
+            options=['Overlay (Both)', 'Original Only', 'Suppressed Only'],
+            index=0,
+            help='Toggle between original, suppressed, or both views'
+        )
+    
     if st.button('Generate Preview', key='preview_graph'):
         plan_df = st.session_state.get('suppression_plan')
         if plan_df is None or plan_df.empty:
@@ -763,65 +773,75 @@ def ui():
                         
                         fig = go.Figure()
                         
-                        # FIRST LAYER: Add suppressed series (dashed lines, background)
-                        for w in winners_sorted:
-                            supp_sub = suppressed_series[suppressed_series['winner'] == w].sort_values('the_date')
-                            if not supp_sub.empty:
-                                series = supp_sub['win_share'] * 100
-                                
-                                # Apply 3-period rolling smoothing
-                                if len(series) >= 3:
-                                    smooth = series.rolling(window=3, center=True, min_periods=1).mean()
-                                else:
-                                    smooth = series
-                                
-                                hover_text = [
-                                    f"{w} (SUPPRESSED)<br>{d.date()}<br>Share: {s:.4f}%"
-                                    for d, s in zip(supp_sub['the_date'], smooth)
-                                ]
-                                
-                                fig.add_trace(go.Scatter(
-                                    x=supp_sub['the_date'],
-                                    y=smooth,
-                                    mode='lines',
-                                    name=f'{w} (After)',
-                                    line=dict(color=color_map[w], width=2, dash='dash'),
-                                    legendgroup=w,
-                                    hoverinfo='text',
-                                    hovertext=hover_text,
-                                    opacity=0.7
-                                ))
+                        # Determine what to show based on toggle
+                        show_suppressed = show_mode in ['Overlay (Both)', 'Suppressed Only']
+                        show_original = show_mode in ['Overlay (Both)', 'Original Only']
+                        
+                        # FIRST LAYER: Add suppressed series (dashed for overlay, solid for suppressed-only)
+                        if show_suppressed:
+                            for w in winners_sorted:
+                                supp_sub = suppressed_series[suppressed_series['winner'] == w].sort_values('the_date')
+                                if not supp_sub.empty:
+                                    series = supp_sub['win_share'] * 100
+                                    
+                                    # Apply 3-period rolling smoothing
+                                    if len(series) >= 3:
+                                        smooth = series.rolling(window=3, center=True, min_periods=1).mean()
+                                    else:
+                                        smooth = series
+                                    
+                                    hover_text = [
+                                        f"{w} (SUPPRESSED)<br>{d.date()}<br>Share: {s:.4f}%"
+                                        for d, s in zip(supp_sub['the_date'], smooth)
+                                    ]
+                                    
+                                    # Use dashed if overlay, solid if suppressed-only
+                                    line_style = 'dash' if show_mode == 'Overlay (Both)' else 'solid'
+                                    line_width = 2 if show_mode == 'Overlay (Both)' else 2.5
+                                    
+                                    fig.add_trace(go.Scatter(
+                                        x=supp_sub['the_date'],
+                                        y=smooth,
+                                        mode='lines',
+                                        name=f'{w}',
+                                        line=dict(color=color_map[w], width=line_width, dash=line_style),
+                                        legendgroup=w,
+                                        hoverinfo='text',
+                                        hovertext=hover_text,
+                                        opacity=0.7 if show_mode == 'Overlay (Both)' else 1.0
+                                    ))
                         
                         # SECOND LAYER: Add base series (solid lines, foreground)
-                        for w in winners_sorted:
-                            base_sub = base_series[base_series['winner'] == w].sort_values('the_date')
-                            if not base_sub.empty:
-                                series = base_sub['win_share'] * 100
-                                
-                                # Apply 3-period rolling smoothing
-                                if len(series) >= 3:
-                                    smooth = series.rolling(window=3, center=True, min_periods=1).mean()
-                                else:
-                                    smooth = series
-                                
-                                # Create hover text with raw and smoothed values
-                                raw_vals = series.round(4).astype(str)
-                                smooth_vals = smooth.round(4).astype(str)
-                                hover_text = [
-                                    f"{w} (ORIGINAL)<br>{d.date()}<br>raw: {r}%<br>smoothed: {s}%"
-                                    for d, r, s in zip(base_sub['the_date'], raw_vals, smooth_vals)
-                                ]
-                                
-                                fig.add_trace(go.Scatter(
-                                    x=base_sub['the_date'],
-                                    y=smooth,
-                                    mode='lines',
-                                    name=f'{w} (Before)',
-                                    line=dict(color=color_map[w], width=2.5),
-                                    legendgroup=w,
-                                    hoverinfo='text',
-                                    hovertext=hover_text
-                                ))
+                        if show_original:
+                            for w in winners_sorted:
+                                base_sub = base_series[base_series['winner'] == w].sort_values('the_date')
+                                if not base_sub.empty:
+                                    series = base_sub['win_share'] * 100
+                                    
+                                    # Apply 3-period rolling smoothing
+                                    if len(series) >= 3:
+                                        smooth = series.rolling(window=3, center=True, min_periods=1).mean()
+                                    else:
+                                        smooth = series
+                                    
+                                    # Create hover text with raw and smoothed values
+                                    raw_vals = series.round(4).astype(str)
+                                    smooth_vals = smooth.round(4).astype(str)
+                                    hover_text = [
+                                        f"{w} (ORIGINAL)<br>{d.date()}<br>raw: {r}%<br>smoothed: {s}%"
+                                        for d, r, s in zip(base_sub['the_date'], raw_vals, smooth_vals)
+                                    ]
+                                    
+                                    fig.add_trace(go.Scatter(
+                                        x=base_sub['the_date'],
+                                        y=smooth,
+                                        mode='lines',
+                                        name=f'{w}',
+                                        line=dict(color=color_map[w], width=2.5),
+                                        legendgroup=w,
+                                        hoverinfo='text',
+                                        hovertext=hover_text
+                                    ))
                         
                         fig.update_layout(
                             title=dict(
@@ -853,16 +873,22 @@ def ui():
                         total_suppressed = suppressed_series.groupby('winner')['total_wins'].sum()
                         total_removed = total_base - total_suppressed
                         
+                        # Calculate win shares
+                        market_base = total_base.sum()
+                        market_suppressed = total_suppressed.sum()
+                        
                         summary = pd.DataFrame({
                             'Winner': total_base.index,
                             'Base Wins': total_base.values,
-                            'Suppressed Wins': total_suppressed.values,
                             'Removed': total_removed.values,
-                            'Removed %': (total_removed / total_base * 100).round(2)
+                            'Wins after Suppression': total_suppressed.values,
+                            'old %': (total_base / market_base * 100).round(2),
+                            'removed %': (total_removed / total_base * 100).round(2),
+                            'new %': (total_suppressed / market_suppressed * 100).round(2)
                         }).sort_values('Removed', ascending=False)
                         
                         st.subheader('Suppression Summary')
-                        st.dataframe(summary, width='stretch')
+                        st.dataframe(summary, use_container_width=True)
                         st.success('✅ Preview generated! Solid lines = base, dashed lines = suppressed (click legend to toggle)')
                         
             except Exception as e:
