@@ -121,8 +121,13 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
                 hover_parts.append(f"Ratio: {r:.3f}")
                 if smoothing_on:
                     hover_parts.append(f"Smoothed: {s:.3f}")
+            elif display_mode == 'volume' and metric in ['wins', 'losses']:
+                # For volume mode, show count with comma formatting
+                hover_parts.append(f"{metric.title()}: {int(r):,}")
+                if smoothing_on:
+                    hover_parts.append(f"Smoothed: {int(s):,}")
             else:
-                # Standard display
+                # Standard display (shares)
                 hover_parts.append(f"Value: {r:.6f}")
                 if smoothing_on:
                     hover_parts.append(f"Smoothed: {s:.6f}")
@@ -348,10 +353,18 @@ def get_ranked_winners(db_path: str, filters: dict):
 
 
 @st.cache_data
-def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, show_other: bool, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
+def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, show_other: bool, metric: str, window: int, z_thresh: float, start_date: str, end_date: str, display_mode: str = "share") -> pd.DataFrame:
     """Compute national PDF with outliers using database"""
     if not selected_winners:
         return pd.DataFrame(columns=["the_date", "winner", metric])
+    
+    # Map volume metrics to database column names
+    db_metric = metric
+    if display_mode == "volume":
+        if metric == "wins":
+            db_metric = "win_share"  # We'll use total_wins column instead
+        elif metric == "losses":
+            db_metric = "loss_share"  # We'll use total_losses column instead
     
     _ds = filters.get('ds', 'gamoshi')
     _mover_ind = (filters.get('mover_ind', 'False') == 'True')
@@ -372,7 +385,7 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
     if base.empty:
         return pd.DataFrame(columns=["the_date", "winner", metric])
     
-    # Get outliers
+    # Get outliers (use share-based metrics for outlier detection even in volume mode)
     outs = outliers.national_outliers(
         ds=_ds,
         mover_ind=_mover_ind,
@@ -382,7 +395,7 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
         z_thresh=z_thresh,
         state=_state,
         dma_name=_dma,
-        metric=metric,
+        metric=db_metric,  # Use share-based metric for outlier detection
         db_path=db_path
     )
     
@@ -403,6 +416,13 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
     if 'total_losses' in pdf.columns:
         pdf['raw_losses'] = pdf['total_losses']
     
+    # Map volume metrics to the correct column names
+    if display_mode == "volume":
+        if metric == "wins" and 'total_wins' in pdf.columns:
+            pdf[metric] = pdf['total_wins']
+        elif metric == "losses" and 'total_losses' in pdf.columns:
+            pdf[metric] = pdf['total_losses']
+    
     # Filter to selected winners
     pdf = pdf[pdf['winner'].isin(selected_winners)].copy()
     
@@ -413,7 +433,21 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
         if other_winners:
             other_data = base[base['winner'].isin(other_winners)].copy()
             if not other_data.empty:
-                other_agg = other_data.groupby('the_date')[metric].sum().reset_index()
+                # For volume mode, aggregate the raw counts
+                if display_mode == "volume":
+                    if metric == "wins" and 'total_wins' in other_data.columns:
+                        other_agg = other_data.groupby('the_date')['total_wins'].sum().reset_index()
+                        other_agg.rename(columns={'total_wins': metric}, inplace=True)
+                    elif metric == "losses" and 'total_losses' in other_data.columns:
+                        other_agg = other_data.groupby('the_date')['total_losses'].sum().reset_index()
+                        other_agg.rename(columns={'total_losses': metric}, inplace=True)
+                    else:
+                        other_agg = other_data.groupby('the_date')[db_metric].sum().reset_index()
+                        if metric not in other_agg.columns:
+                            other_agg.rename(columns={db_metric: metric}, inplace=True)
+                else:
+                    other_agg = other_data.groupby('the_date')[metric].sum().reset_index()
+                
                 other_agg['winner'] = 'Other'
                 other_agg['is_outlier'] = False
                 other_agg['zscore'] = 0
@@ -428,10 +462,18 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
 
 
 @st.cache_data
-def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
+def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str, display_mode: str = "share") -> pd.DataFrame:
     """Compute competitor PDF with outliers using database"""
     if not competitors:
         return pd.DataFrame(columns=["the_date", "competitor", metric])
+    
+    # Map volume metrics to database column names for outlier detection
+    db_metric = metric
+    if display_mode == "volume":
+        if metric == "wins":
+            db_metric = "win_share"
+        elif metric == "losses":
+            db_metric = "loss_share"
     
     _ds = filters.get('ds', 'gamoshi')
     _mover_ind = (filters.get('mover_ind', 'False') == 'True')
@@ -458,15 +500,17 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
     base['raw_wins'] = base['h2h_wins']
     base['raw_losses'] = base['h2h_losses']
     
-    # Calculate metric
-    if metric == 'win_share':
-        base['win_share'] = base['h2h_wins'] / base['primary_total_wins'].replace(0, pd.NA)
-    elif metric == 'loss_share':
-        base['loss_share'] = base['h2h_losses'] / base['primary_total_losses'].replace(0, pd.NA)
-    elif metric == 'wins_per_loss':
-        base['wins_per_loss'] = base['h2h_wins'] / base['h2h_losses'].replace(0, pd.NA)
+    # Calculate metrics (both share and volume)
+    base['win_share'] = base['h2h_wins'] / base['primary_total_wins'].replace(0, pd.NA)
+    base['loss_share'] = base['h2h_losses'] / base['primary_total_losses'].replace(0, pd.NA)
+    base['wins_per_loss'] = base['h2h_wins'] / base['h2h_losses'].replace(0, pd.NA)
     
-    # Compute outliers inline (day-type grouped z-score)
+    # For volume mode, add volume columns
+    if display_mode == "volume":
+        base['wins'] = base['h2h_wins']
+        base['losses'] = base['h2h_losses']
+    
+    # Compute outliers inline (day-type grouped z-score) - always use share-based for detection
     def _z_for_group(g):
         g = g.sort_values('the_date')
         g['day_type'] = g['the_date'].apply(lambda d: 'Sat' if pd.Timestamp(d).weekday() == 5
@@ -477,7 +521,7 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
         
         for dt in g['day_type'].unique():
             mask = g['day_type'] == dt
-            vals = g.loc[mask, metric]
+            vals = g.loc[mask, db_metric]  # Use share-based metric for outlier detection
             if len(vals) > 1:
                 mu = vals.shift(1).rolling(window, min_periods=1).mean()
                 sigma = vals.shift(1).rolling(window, min_periods=1).std()
@@ -524,17 +568,44 @@ def main():
     st.sidebar.header("📋 Dashboard Controls")
     st.session_state.analysis_mode = st.sidebar.selectbox("Analysis Mode", ["National", "Competitor"], index=0 if st.session_state.analysis_mode == "National" else 1)
 
-    metric_options = ["win_share", "loss_share", "wins_per_loss"]
-    metric_index = metric_options.index(st.session_state.metric) if st.session_state.metric in metric_options else 0
-    st.session_state.metric = st.sidebar.selectbox("Select Metric", metric_options, index=metric_index, format_func=lambda x: x.replace('_', ' ').title())
-    
-    # Volume vs Share toggle
+    # Volume vs Share toggle - MOVED BEFORE METRIC SELECTION
     st.session_state.display_mode = st.sidebar.radio(
         "Display Mode", 
         ["share", "volume"], 
         index=0 if st.session_state.display_mode == "share" else 1,
         format_func=lambda x: "Share (%)" if x == "share" else "Volume (Count)",
         help="Share shows percentage, Volume shows actual win/loss counts"
+    )
+    
+    # Metric selection - changes based on display mode
+    if st.session_state.display_mode == "volume":
+        metric_options = ["wins", "losses", "wins_per_loss"]
+        metric_display_names = {"wins": "Wins", "losses": "Losses", "wins_per_loss": "Wins Per Loss"}
+    else:
+        metric_options = ["win_share", "loss_share", "wins_per_loss"]
+        metric_display_names = {"win_share": "Win Share", "loss_share": "Loss Share", "wins_per_loss": "Wins Per Loss"}
+    
+    # Map current metric to new format if display mode changed
+    current_metric = st.session_state.metric
+    if st.session_state.display_mode == "volume" and current_metric in ["win_share", "loss_share"]:
+        # Convert share metrics to volume metrics
+        if current_metric == "win_share":
+            current_metric = "wins"
+        elif current_metric == "loss_share":
+            current_metric = "losses"
+    elif st.session_state.display_mode == "share" and current_metric in ["wins", "losses"]:
+        # Convert volume metrics to share metrics
+        if current_metric == "wins":
+            current_metric = "win_share"
+        elif current_metric == "losses":
+            current_metric = "loss_share"
+    
+    metric_index = metric_options.index(current_metric) if current_metric in metric_options else 0
+    st.session_state.metric = st.sidebar.selectbox(
+        "Select Metric", 
+        metric_options, 
+        index=metric_index, 
+        format_func=lambda x: metric_display_names.get(x, x.replace('_', ' ').title())
     )
 
     # Collapsible sections for better organization
@@ -544,6 +615,17 @@ def main():
             selection_index = selection_modes.index(st.session_state.selection_mode) if st.session_state.selection_mode in selection_modes else 0
             st.session_state.selection_mode = st.radio("Selection Mode", selection_modes, index=selection_index)
 
+            # Top N slider when in Top N mode
+            if st.session_state.selection_mode == "Top N Carriers":
+                st.session_state.top_n = st.slider(
+                    "Top N", 
+                    min_value=3, 
+                    max_value=50, 
+                    value=st.session_state.top_n, 
+                    step=1,
+                    help="Number of top carriers to display"
+                )
+            
             # Custom multi-select with search for carriers (preloaded from ranked list)
             if st.session_state.selection_mode == "Custom Selection":
                 try:
@@ -679,6 +761,7 @@ def main():
                 float(st.session_state.outlier_z),
                 str(st.session_state.graph_start),
                 str(st.session_state.graph_end),
+                st.session_state.display_mode,
             )
         else:
             if st.session_state.selection_mode == "Top N Carriers":
@@ -696,6 +779,7 @@ def main():
                 z_thresh=float(st.session_state.outlier_z),
                 start_date=str(st.session_state.graph_start),
                 end_date=str(st.session_state.graph_end),
+                st.session_state.display_mode,
             )
         st.session_state.last_pdf = pdf
         # capture applied signature
