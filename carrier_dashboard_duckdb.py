@@ -494,7 +494,7 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
     _state = filters.get('state') if filters else None
     _dma = filters.get('dma_name') if filters else None
 
-    base = _metrics.competitor_view(db_path, _ds, _mover_ind, start_date, end_date, primary, competitors, state=_state, dma_name=_dma)
+    base = _metrics.competitor_view(_ds, _mover_ind, start_date, end_date, primary, competitors, state=_state, dma_name=_dma, db_path=db_path)
     if base.empty:
         return pd.DataFrame(columns=["the_date", "winner", metric])
 
