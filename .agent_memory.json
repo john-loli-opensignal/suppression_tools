@@ -246,5 +246,14 @@
     },
     "example": "2025-07-21: AT&T vs Cox had z=-3.33 on losses, now correctly flagged and shown with red triangle-down marker",
     "location": "tools/db.py::national_outliers_from_cube() and carrier_dashboard_duckdb.py::create_plot()"
+  },
+  "recent_fixes": {
+    "outlier_direction_parameter": {
+      "issue": "NameError: name 'outlier_direction' is not defined in compute_competitor_pdf",
+      "root_cause": "outlier_direction was referenced in _z_for_group nested function but not passed as parameter",
+      "solution": "Added outlier_direction parameter to compute_competitor_pdf function signature and mapped st.session_state.outlier_show to outlier_direction when calling the function",
+      "date": "2025-10-06",
+      "commit": "475f946"
+    }
   }
 }
