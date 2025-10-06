@@ -40,9 +40,11 @@ def ui():
     egregious_threshold = st.sidebar.slider('Egregious Impact', min_value=10, max_value=100, value=40, step=5,
                                             help='Flag outliers outside top N with impact > this')
     
-    st.sidebar.header('Distribution Thresholds')
-    distributed_min_wins = st.sidebar.slider('Min Wins for Distribution', min_value=1, max_value=50, value=2, step=1,
-                                             help='Minimum current wins for pair to be eligible for distributed suppression (default: 2)')
+    st.sidebar.header('Suppression Thresholds')
+    auto_min_wins = st.sidebar.slider('Min Wins for Auto Suppression', min_value=1, max_value=20, value=2, step=1,
+                                      help='Minimum current wins for pair to be auto-suppressed (outliers, first appearance, etc.)')
+    distributed_min_wins = st.sidebar.slider('Min Wins for Distribution', min_value=1, max_value=50, value=1, step=1,
+                                             help='Minimum current wins for pair to be eligible for distributed suppression (default: 1)')
     
     # Advanced filters (optional)
     with st.sidebar.expander('🔍 Advanced Filters', expanded=False):
@@ -451,8 +453,8 @@ def ui():
                                     (sub['new_pair'] == True)
                                 ].copy()
                                 
-                                # Apply minimum volume filter (5 wins per day)
-                                auto_candidates = auto_candidates[auto_candidates['pair_wins_current'] >= 5]
+                                # Apply minimum volume filter (configurable)
+                                auto_candidates = auto_candidates[auto_candidates['pair_wins_current'] >= auto_min_wins]
                                 
                                 if not auto_candidates.empty:
                                     # Calculate removal amount: NO CAP, remove FULL excess
