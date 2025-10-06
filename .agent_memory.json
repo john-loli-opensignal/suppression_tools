@@ -187,5 +187,51 @@
       "dow_definition": "1=Sunday, 2=Monday, ..., 7=Saturday (DuckDB DAYOFWEEK())",
       "verified": "Aug 3, 2025 is Sunday (dow=1) \u2705"
     }
+  },
+  "dashboard_enhancements": {
+    "carrier_dashboard_duckdb_improvements": {
+      "date": "2025-10-06",
+      "commit": "3d320f0",
+      "features": {
+        "volume_share_toggle": {
+          "description": "Toggle between share (%) and volume (count) display",
+          "location": "Sidebar radio button below metric selection",
+          "default": "share",
+          "affects": [
+            "y-axis labels",
+            "chart title",
+            "display values"
+          ]
+        },
+        "enhanced_tooltips": {
+          "wins_per_loss": "Shows actual Wins, Losses, Ratio in tooltip",
+          "formatting": "Clean HTML with <br> separators, bold carrier names",
+          "columns_added": [
+            "raw_wins",
+            "raw_losses"
+          ]
+        },
+        "collapsible_sections": {
+          "carrier_selection": "Expanded by default, contains Top N or Custom selection",
+          "display_settings": "Collapsed, contains smoothing, markers, palette, stacked",
+          "filters": "Expanded by default, contains mover_ind, ds, state, dma_name",
+          "graph_window": "Collapsed, contains start/end date pickers",
+          "outliers": "Collapsed, contains window, z-score, show mode"
+        },
+        "improved_layout": {
+          "old_ratio": "[2, 1]",
+          "new_ratio": "[12, 1.5]",
+          "chart_width_increase": "~8x wider relative to summary",
+          "summary_font": "11px via custom CSS",
+          "summary_format": "Compact with bullets for competitors"
+        }
+      },
+      "bugs_fixed": [
+        "Removed duplicate compute_competitor_pdf() function",
+        "Added display_mode to signature tracking",
+        "Fixed deprecated use_container_width \u2192 width='stretch'"
+      ],
+      "documentation": "analysis/competitor_view_enhancements.md"
+    }
   }
 }
