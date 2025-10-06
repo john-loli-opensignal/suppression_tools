@@ -20,6 +20,20 @@
       "key_insight": "Different carriers have different pair distributions. Large carriers (AT&T) have concentrated pairs (100+ wins). Small carriers (Windstream) have distributed pairs (1-5 wins). Hardcoded thresholds fail for one or the other.",
       "commit": "c520b1c",
       "file": "analysis/windstream_debug_analysis.md"
+    },
+    "competitor_losses_bug": {
+      "date": "2025-10-06",
+      "problem": "Wins per loss chart showing 1.0 across the board. AT&T vs Cox showed 36 losses instead of 17.",
+      "root_cause": "Misunderstood carrier_data schema. Each matchup has TWO rows with inverted winner/loser. For losses, need to query winner=primary (not loser=primary).",
+      "schema_explanation": {
+        "carrier_data_structure": "Row: winner=AT&T, loser=Cox, adjusted_wins=36, adjusted_losses=17 means AT&T beat Cox 36 times AND AT&T lost to Cox 17 times",
+        "loss_cube_structure": "Aggregated as SUM(adjusted_losses) GROUP BY winner, loser. So winner=AT&T, loser=Cox contains AT&T's losses to Cox.",
+        "correct_query": "For primary's losses to competitor, query loss_cube WHERE winner=primary AND loser=competitor",
+        "incorrect_query": "DO NOT query WHERE loser=primary AND winner=competitor (that gives competitor's losses to primary)"
+      },
+      "solution": "Fixed h2h_losses CTE in competitor_view() to use winner=primary, loser=competitor",
+      "verification": "AT&T vs Cox on 2025-07-21: 36 wins, 17 losses, WPL=2.12 ✅",
+      "commit": "0d61ae0"
     }
   },
   "suppression_thresholds": {
