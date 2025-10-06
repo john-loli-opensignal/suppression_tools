@@ -1,120 +1,207 @@
 {
   "project_structure": {
     "database": {
-      "path": "/home/jloli/codebase-comparison/suppression_tools/data/databases/duck_suppression.db",
-      "note": "ALWAYS use this path. No other .db files should exist.",
-      "assert_check": "db_path must be 'data/databases/duck_suppression.db'"
+      "path": "data/databases/duck_suppression.db",
+      "note": "SINGLE DATABASE ONLY - Assert this path in every connection",
+      "assert_check": "assert db_path.endswith('data/databases/duck_suppression.db')"
     },
     "key_directories": {
-      "tools": "suppression_tools/src/ - Main library code",
-      "data": "data/ - Database and outputs",
-      "docs": "docs/ - Markdown reports and analysis",
-      "scripts": "Root level - Executable scripts"
+      "tools": "tools/src/ - Main library code (metrics, outliers, plan, suppress)",
+      "data": "data/ - Database and raw data",
+      "analysis": "analysis/ - ALL analysis outputs, temp files, reports",
+      "scripts": "scripts/ - Executable scripts (build, analysis)",
+      "suppressions": "suppressions/rounds/ - Suppression plan CSVs"
     }
   },
   "database_schema": {
-    "CRITICAL_PATH_ASSERTION": "ALWAYS use 'data/databases/duck_suppression.db' - NO OTHER PATHS",
+    "CRITICAL_PATH": "data/databases/duck_suppression.db",
     "raw_tables": {
-      "gamoshi_preagg": "Partitioned raw data loaded from parquet",
-      "note": "Format: {ds}_preagg with partitions by the_date"
+      "pattern": "{ds}_preagg with partitions by the_date"
     },
     "cube_tables": {
       "pattern": "{ds}_{win|loss}_{mover|non_mover}_cube",
-      "gamoshi_win_mover_cube": "Aggregated at date, state, dma_name, winner, loser level",
-      "gamoshi_win_non_mover_cube": "Aggregated at date, state, dma_name, winner, loser level",
-      "gamoshi_loss_mover_cube": "Aggregated at date, state, dma_name, winner, loser level",
-      "gamoshi_loss_non_mover_cube": "Aggregated at date, state, dma_name, winner, loser level",
-      "note": "These are indexed on date, state, dma, winner, loser for fast queries"
+      "level": "Aggregated at date, state, dma_name, winner, loser",
+      "indexes": ["date", "state", "dma", "winner", "loser"],
+      "performance": "Sub-second queries on 6-10GB datasets"
+    },
+    "census_cube_tables": {
+      "pattern": "{ds}_{win|loss}_{mover|non_mover}_census_cube",
+      "level": "Aggregated at date, state, dma_name, winner, loser, census_block_id",
+      "use_case": "Surgical precision suppression"
     },
     "rolling_views": {
-      "gamoshi_win_mover_rolling": "DOW-aware rolling metrics (28d, 14d windows)",
-      "gamoshi_win_non_mover_rolling": "DOW-aware rolling metrics (28d, 14d windows)",
+      "pattern": "{ds}_win_{mover|non_mover}_rolling",
       "columns": [
-        "the_date", "state", "dma_name", "winner", "loser",
-        "total_wins", "avg_wins_28d", "stddev_wins_28d", "z_score_28d",
-        "avg_wins_14d", "stddev_wins_14d", "z_score_14d",
-        "pct_change_28d", "pct_change_14d",
-        "days_since_last_seen", "is_first_appearance",
-        "day_of_week", "dow_name"
+        "the_date", "day_of_week", "winner", "loser", "dma", "dma_name", "state",
+        "total_wins", "record_count",
+        "avg_wins_28d", "stddev_wins_28d", "n_periods_28d",
+        "zscore", "pct_change",
+        "is_first_appearance", "is_outlier",
+        "appearance_rank"
       ],
-      "note": "DuckDB uses 0=Monday, 6=Sunday. Views map: 1=Sunday, 7=Saturday"
+      "note": "DOW-aware rolling metrics - 28d window partitioned by day_of_week",
+      "dow_mapping": "DuckDB: 0=Monday...6=Sunday (use DAYOFWEEK() for 1=Sunday...7=Saturday)"
+    },
+    "enriched_views": {
+      "pattern": "{ds}_win_{mover|non_mover}_enriched",
+      "purpose": "Combines pair-level + national-level metrics for UI",
+      "columns": [
+        "All from rolling view",
+        "nat_total_wins", "nat_market_wins", "nat_share_current",
+        "nat_mu_share", "nat_sigma_share", "nat_z_score"
+      ],
+      "note": "Created on-demand for main.py, filtered to graph window"
+    },
+    "suppression_tables": {
+      "schema": "suppressions",
+      "metadata": "suppressions.rounds - Round metadata",
+      "plans": "suppressions.{round_name} - Suppression plan records",
+      "backup": "Also save to suppressions/rounds/{round_name}.csv"
     }
   },
   "outlier_detection": {
     "hierarchical_levels": [
       "national (ds, mover_ind) - Top level shares",
-      "h2h_national (ds, mover_ind, winner, loser) - Pair analysis",
+      "h2h_national (winner, loser) - Pair analysis",
       "state (state, ds, mover_ind) - Geographic patterns",
-      "state_h2h (state, ds, mover_ind, winner, loser) - State pair analysis",
-      "dma (dma_name, ds, mover_ind, winner, loser) - Lowest actionable level"
+      "dma (dma_name, winner, loser) - Actionable level",
+      "census_block (cb_id, dma, winner, loser) - Surgical precision"
     ],
     "methods": {
-      "z_score_outlier": {
-        "threshold": "1.5 (parameterized, can go to 2.0)",
-        "metric": "z_score_28d > 1.5 OR z_score_14d > 1.5"
+      "zscore": {
+        "national": 2.5,
+        "dma_pairs": 1.5,
+        "census_blocks": 3.0,
+        "note": "DOW-partitioned rolling windows"
       },
       "percentage_spike": {
-        "threshold": "30% increase",
-        "metric": "pct_change_28d > 0.30 OR pct_change_14d > 0.30"
+        "threshold": 30,
+        "note": "30% increase over baseline"
       },
       "first_appearance": {
-        "level": "DMA level (not census block - too noisy)",
-        "metric": "is_first_appearance = TRUE AND total_wins >= 10"
+        "level": "DMA (winner, loser, dma) - not census block",
+        "note": "New blocks appear daily, DMA level more stable"
       },
-      "minimum_threshold": {
-        "value": "10 wins on current date",
-        "reason": "Avoid noise from low-volume data"
+      "rare_pairs": {
+        "threshold": 5,
+        "note": "Appearance rank <= 5"
+      },
+      "minimum_volume": {
+        "daily": 5,
+        "note": "Ignore pairs with < 5 wins on target date"
       }
     },
-    "rolling_windows": {
-      "primary": "28 days (4 weeks same DOW)",
-      "secondary": "14 days (2 weeks same DOW)",
-      "dow_aware": "CRITICAL - weekends have higher volume than weekdays",
-      "minimum_history": "4 preceding same-DOW dates"
+    "windows": {
+      "weekday": "14 days (28d window = ~14 same-DOW)",
+      "weekend": "4-14 days minimum (fewer Sat/Sun samples)",
+      "note": "DOW partitioning prevents false positives from weekend spikes"
     }
   },
   "suppression_workflow": {
-    "detection": "Top-down: National → H2H → State → State H2H → DMA",
-    "action": "Remove IMPACT (current - avg) from outlier DMA pairs",
-    "distribution": "Distribute suppressed wins to non-outlier pairs proportionally",
-    "visualization": "Solid line = original, dashed line = suppressed (BELOW solid)",
-    "old_approach": "Used CSV cubes with same logic - worked well"
-  },
-  "key_learnings": {
-    "database_paths": "ONLY use data/databases/duck_suppression.db - ASSERT this path exists before ANY query",
-    "dow_mapping": "DuckDB dayofweek(date) returns 0-6 where 0=Monday, 6=Sunday",
-    "first_appearance_noise": "Census block level too noisy (new blocks every day)",
-    "weekend_volume": "Saturday/Sunday have significantly higher volume than weekdays",
-    "minimum_thresholds": "Essential to avoid flagging noise as outliers",
-    "commit_style": "feat(scope): description - one logical change per commit"
-  },
-  "active_datasets": {
-    "gamoshi": {
-      "date_range": "2025-02-19 to 2025-09-04",
-      "focus_dates": ["2025-06-19", "2025-08-15", "2025-08-16", "2025-08-17", "2025-08-18"],
-      "carriers": ["AT&T", "T-Mobile", "Verizon", "Dish", "UScellular", "Consolidated", "Ezee Fiber", "etc"],
-      "status": "Primary dataset for POC and testing",
-      "notable_patterns": {
-        "ezee_fiber_houston": {
-          "market": "Houston, TX",
-          "competitor": "Consolidated",
-          "trend": "Ezee Fiber's share of Consolidated losses increased 614% (3.5% → 25%)",
-          "period": "April-September 2025",
-          "peak": "July 2025 - 13 losses (6.04% share)"
-        }
+    "main_py_steps": [
+      "0. Preview base graph - Unsuppressed national shares",
+      "1. Scan outliers - Detect national-level anomalies",
+      "2. Build plan - Generate auto + distributed suppression",
+      "3. Save plan - Store to database and CSV",
+      "4. Build dataset - Apply to files (optional)",
+      "5. Preview graph - Before/after comparison"
+    ],
+    "distribution_algorithm": {
+      "stage_1_auto": {
+        "triggers": [
+          "pair_outlier_pos (z-score)",
+          "pct_outlier_pos (30% spike)",
+          "rare_pair (appearance_rank <= 5)",
+          "new_pair (first appearance)"
+        ],
+        "removal": "Excess over baseline (surgical)",
+        "minimum": "5 wins per day"
+      },
+      "stage_2_distributed": {
+        "when": "Stage 1 doesn't reach target",
+        "method": "Even distribution across all pairs",
+        "caps": "Respects pair capacity (can't remove more than exists)",
+        "goal": "No single DMA bears full burden"
       }
+    },
+    "top_50_filter": {
+      "scope": "Total wins over entire time series",
+      "egregious_threshold": 40,
+      "note": "Focus on top 50, but flag outliers with 40+ impact outside"
     }
   },
-  "commands": {
-    "build_cubes": "uv run build_cubes_in_db.py --all",
-    "create_views": "Direct SQL via db.py query() method",
-    "run_dashboard": "uv run streamlit run carrier_dashboard_duckdb.py",
-    "query_db": "Use tools.db.query(sql, db_path='data/databases/duck_suppression.db')"
+  "performance": {
+    "cube_queries": "< 1 second",
+    "rolling_view_queries": "< 2 seconds",
+    "enriched_view_creation": "2-5 seconds (filtered to window)",
+    "full_workflow": "< 30 seconds scan to preview",
+    "note": "100x+ faster than parquet scanning"
   },
-  "common_queries": {
-    "competitive_loss_share": "Query gamoshi_loss_mover_cube WHERE loser = target_carrier",
-    "market_growth": "Track winner/loser pairs by dma_name over time",
-    "carrier_names": "Use ILIKE for fuzzy matching (e.g., 'Ezee Fiber', 'Consolidated')",
-    "houston_dma": "Houston, TX (also exists: Columbus-Tupelo-West Point-Houston, MS)"
+  "key_functions": {
+    "tools.db": {
+      "get_db_path()": "Returns canonical DB path with assertion",
+      "query(sql, db_path)": "Execute SQL, return DataFrame",
+      "get_connection(db_path)": "Get DuckDB connection with assertion"
+    },
+    "tools.src.metrics": {
+      "national_timeseries()": "Win share time series",
+      "pair_metrics()": "Winner-loser pair analysis",
+      "competitor_view()": "H2H competitive landscape"
+    },
+    "tools.src.outliers": {
+      "national_outliers()": "DOW-aware z-score detection",
+      "cube_outliers()": "Query pre-computed outlier flags"
+    },
+    "tools.src.plan": {
+      "base_national_series()": "Get national shares (DB-backed)",
+      "scan_base_outliers()": "Scan for outliers (rolling views)",
+      "build_enriched_cube()": "Create UI-ready enriched view",
+      "get_top_50_carriers()": "Filter to top 50 by wins"
+    }
+  },
+  "main_py_restoration": {
+    "status": "IN PROGRESS - Phase 1 complete",
+    "plan_location": "analysis/main_py_restoration_plan.md",
+    "summary_location": "analysis/restoration_summary.md",
+    "approach": "Phase-by-phase with validation at each step",
+    "estimated_hours": 13,
+    "phase_1_complete": true,
+    "decisions_made": {
+      "z_score_thresholds": "UI sliders with defaults (nat: 2.5, dma: 1.5)",
+      "egregious_threshold": "Impact > 40 (national level)",
+      "top_n_scope": "Entire time series for stability",
+      "first_appearance": "DMA level (not census block)",
+      "round_conflicts": "Error with overwrite option + alert box",
+      "enriched_view_scope": "Graph window for performance",
+      "max_suppression_cap": "NO CAP - remove full excess (user requirement)",
+      "rare_pairs": "Only if z-score violation AND impact > 15",
+      "legacy_mode": "Keep toggle for old rare pair detection",
+      "impact_configurable": "Yes, default to 40"
+    },
+    "test_date": "2025-06-19",
+    "benchmark": "Known outliers from previous analysis"
+  },
+  "common_mistakes": {
+    "multiple_databases": "NEVER create .db files outside data/databases/",
+    "temp_files_in_root": "ALWAYS use analysis/ subdirectories",
+    "dow_confusion": "DuckDB DAYOFWEEK: 1=Sunday, strftime('%w'): 0=Sunday",
+    "missing_assertion": "ALWAYS assert db_path before connection",
+    "csv_only": "Save to BOTH database AND CSV for compatibility"
+  },
+  "git_workflow": {
+    "branch": "codex-agent",
+    "commit_style": "<type>(scope): description",
+    "validation": "Get user approval before proceeding to next phase",
+    "testing": "Test each change immediately after implementation"
+  },
+  "analysis_workflow": {
+    "output_location": "analysis/{analysis_name}/",
+    "subdirs": {
+      "images": "analysis/{name}/images/",
+      "outputs": "analysis/{name}/outputs/",
+      "reports": "analysis/{name}/*.md"
+    },
+    "cleanup": "Remove temp files, keep final reports in docs/",
+    "vector_db": "Update .agent_memory.json after each major analysis"
   }
 }
