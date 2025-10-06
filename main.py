@@ -33,12 +33,19 @@ def ui():
     view_end = st.sidebar.date_input('End Date', value=date(2025,8,31))
 
     st.sidebar.header('Outlier Detection Thresholds')
-    top_n = st.sidebar.slider('Top N Carriers', min_value=10, max_value=100, value=50, step=10,
+    top_n = st.sidebar.slider('Top N Carriers', min_value=10, max_value=100, value=25, step=5,
                                help='Focus on top N carriers by total wins')
     z_threshold = st.sidebar.slider('Z-Score Threshold', min_value=0.5, max_value=5.0, value=2.5, step=0.1,
                                      help='Statistical outlier threshold (default: 2.5)')
     egregious_threshold = st.sidebar.slider('Egregious Impact', min_value=10, max_value=100, value=40, step=5,
                                             help='Flag outliers outside top N with impact > this')
+    
+    # Advanced filters (optional)
+    with st.sidebar.expander('🔍 Advanced Filters', expanded=False):
+        st.caption('Optional: Further refine carrier selection')
+        min_share_pct = st.slider('Min Overall Share %', min_value=0.0, max_value=2.0, value=0.5, step=0.1,
+                                   help='Only show carriers with >= this % of total wins (entire series)')
+        st.info(f'💡 With {min_share_pct}% threshold, you\'ll see ~20 carriers in top 25')
 
     # Step 0: Preview base graph (unsuppressed)
     # Remove the separate "Preview Base Graph" section - just show it in scan results
@@ -56,15 +63,16 @@ def ui():
                     end_date=str(view_end),
                     z_threshold=z_threshold,
                     top_n=top_n,
+                    min_share_pct=min_share_pct,
                     egregious_threshold=egregious_threshold,
                     db_path=db_path
                 )
             
             st.session_state['base_outliers'] = outliers_df if not outliers_df.empty else None
             
-            # Always show graph with all top carriers
+            # Always show graph with all top carriers (filtered by share if specified)
             with st.spinner('Loading national time series...'):
-                all_top_carriers = get_top_n_carriers(ds, mover_ind, n=top_n, db_path=db_path)
+                all_top_carriers = get_top_n_carriers(ds, mover_ind, n=top_n, min_share_pct=min_share_pct, db_path=db_path)
                 ts = base_national_series(
                     ds=ds,
                     mover_ind=mover_ind,
@@ -91,7 +99,8 @@ def ui():
             
             # Display graph with all top carriers + outlier markers
             if not ts.empty:
-                st.subheader(f'National Win Share - Top {top_n} Carriers')
+                st.subheader(f'National Win Share - Top {len(all_top_carriers)} Carriers (min share: {min_share_pct}%)')
+                st.caption(f'Showing top {top_n} carriers with >= {min_share_pct}% overall share + egregious outliers')
                 try:
                     # Rank carriers by total wins
                     carrier_totals = ts.groupby('winner')['total_wins'].sum().sort_values(ascending=False)
@@ -106,15 +115,20 @@ def ui():
                         outliers_copy['the_date'] = pd.to_datetime(outliers_copy['the_date'])
                         outliers_copy['is_outlier'] = True
                         
+                        # Mark egregious outliers (those not in top carriers list)
+                        outliers_copy['is_egregious'] = ~outliers_copy['winner'].isin(all_top_carriers)
+                        
                         ts_with_outliers = ts_copy.merge(
-                            outliers_copy[['the_date', 'winner', 'is_outlier', 'nat_z_score', 'impact']],
+                            outliers_copy[['the_date', 'winner', 'is_outlier', 'is_egregious', 'nat_z_score', 'impact']],
                             on=['the_date', 'winner'],
                             how='left'
                         )
                         ts_with_outliers['is_outlier'] = ts_with_outliers['is_outlier'].fillna(False)
+                        ts_with_outliers['is_egregious'] = ts_with_outliers['is_egregious'].fillna(False)
                     else:
                         ts_with_outliers = ts_copy.copy()
                         ts_with_outliers['is_outlier'] = False
+                        ts_with_outliers['is_egregious'] = False
                     
                     # Use same color palette with ranking
                     palette = px.colors.qualitative.Dark24
@@ -170,73 +184,141 @@ def ui():
                                 # Get smoothed values from pre-computed series
                                 smooth_series = carrier_smoothed[w]
                                 
-                                # Split into positive and negative z-scores
+                                # Split into positive and negative z-scores, and egregious vs regular
                                 pos_out = outlier_sub[outlier_sub['nat_z_score'] >= 0]
                                 neg_out = outlier_sub[outlier_sub['nat_z_score'] < 0]
                                 
-                                # Positive outliers (yellow stars)
+                                # Positive outliers - split by egregious flag
                                 if not pos_out.empty:
-                                    # Get y values from smoothed series
-                                    pos_y = [smooth_series.get(d, (pos_out.loc[pos_out['the_date']==d, 'win_share'].iloc[0] * 100)) 
-                                             for d in pos_out['the_date']]
+                                    pos_egregious = pos_out[pos_out['is_egregious'] == True]
+                                    pos_regular = pos_out[pos_out['is_egregious'] == False]
                                     
-                                    hover_text = [
-                                        f"{w}<br>{d.date()}<br>Share: {y:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
-                                        for d, y, z, imp in zip(
-                                            pos_out['the_date'], 
-                                            pos_y,
-                                            pos_out['nat_z_score'].fillna(0),
-                                            pos_out['impact'].fillna(0)
-                                        )
-                                    ]
-                                    fig.add_trace(go.Scatter(
-                                        x=pos_out['the_date'],
-                                        y=pos_y,
-                                        mode='markers',
-                                        name=f'{w} outlier (+)',
-                                        marker=dict(
-                                            symbol='star', 
-                                            color='yellow', 
-                                            size=11, 
-                                            line=dict(color='black', width=0.6),
-                                            opacity=0.95
-                                        ),
-                                        showlegend=False,
-                                        hoverinfo='text',
-                                        hovertext=hover_text
-                                    ))
+                                    # Regular positive outliers (yellow stars)
+                                    if not pos_regular.empty:
+                                        pos_y = [smooth_series.get(d, (pos_regular.loc[pos_regular['the_date']==d, 'win_share'].iloc[0] * 100)) 
+                                                 for d in pos_regular['the_date']]
+                                        
+                                        hover_text = [
+                                            f"{w}<br>{d.date()}<br>Share: {y:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
+                                            for d, y, z, imp in zip(
+                                                pos_regular['the_date'], 
+                                                pos_y,
+                                                pos_regular['nat_z_score'].fillna(0),
+                                                pos_regular['impact'].fillna(0)
+                                            )
+                                        ]
+                                        fig.add_trace(go.Scatter(
+                                            x=pos_regular['the_date'],
+                                            y=pos_y,
+                                            mode='markers',
+                                            name=f'{w} outlier (+)',
+                                            marker=dict(
+                                                symbol='star', 
+                                                color='yellow', 
+                                                size=11, 
+                                                line=dict(color='black', width=0.6),
+                                                opacity=0.95
+                                            ),
+                                            showlegend=False,
+                                            hoverinfo='text',
+                                            hovertext=hover_text
+                                        ))
+                                    
+                                    # Egregious positive outliers (orange diamonds - more prominent)
+                                    if not pos_egregious.empty:
+                                        pos_y = [smooth_series.get(d, (pos_egregious.loc[pos_egregious['the_date']==d, 'win_share'].iloc[0] * 100)) 
+                                                 for d in pos_egregious['the_date']]
+                                        
+                                        hover_text = [
+                                            f"⚠️ EGREGIOUS: {w}<br>{d.date()}<br>Share: {y:.4f}%<br>Impact: {int(imp)} (>{egregious_threshold})"
+                                            for d, y, imp in zip(
+                                                pos_egregious['the_date'], 
+                                                pos_y,
+                                                pos_egregious['impact'].fillna(0)
+                                            )
+                                        ]
+                                        fig.add_trace(go.Scatter(
+                                            x=pos_egregious['the_date'],
+                                            y=pos_y,
+                                            mode='markers',
+                                            name=f'⚠️ {w} EGREGIOUS',
+                                            marker=dict(
+                                                symbol='diamond', 
+                                                color='orange', 
+                                                size=15, 
+                                                line=dict(color='darkred', width=2),
+                                                opacity=1.0
+                                            ),
+                                            showlegend=True,  # Show in legend so they stand out
+                                            hoverinfo='text',
+                                            hovertext=hover_text
+                                        ))
                                 
-                                # Negative outliers (red minus signs)
+                                # Negative outliers (red minus signs) - usually not egregious, but check anyway
                                 if not neg_out.empty:
-                                    # Get y values from smoothed series
-                                    neg_y = [smooth_series.get(d, (neg_out.loc[neg_out['the_date']==d, 'win_share'].iloc[0] * 100)) 
-                                             for d in neg_out['the_date']]
+                                    neg_egregious = neg_out[neg_out['is_egregious'] == True]
+                                    neg_regular = neg_out[neg_out['is_egregious'] == False]
                                     
-                                    hover_text = [
-                                        f"{w}<br>{d.date()}<br>Share: {y:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
-                                        for d, y, z, imp in zip(
-                                            neg_out['the_date'], 
-                                            neg_y,
-                                            neg_out['nat_z_score'].fillna(0),
-                                            neg_out['impact'].fillna(0)
-                                        )
-                                    ]
-                                    fig.add_trace(go.Scatter(
-                                        x=neg_out['the_date'],
-                                        y=neg_y,
-                                        mode='markers',
-                                        name=f'{w} outlier (-)',
-                                        marker=dict(
-                                            symbol='line-ew', 
-                                            color='red', 
-                                            size=12,
-                                            line=dict(color='black', width=0.6),
-                                            opacity=0.95
-                                        ),
-                                        showlegend=False,
-                                        hoverinfo='text',
-                                        hovertext=hover_text
-                                    ))
+                                    # Regular negative outliers
+                                    if not neg_regular.empty:
+                                        neg_y = [smooth_series.get(d, (neg_regular.loc[neg_regular['the_date']==d, 'win_share'].iloc[0] * 100)) 
+                                                 for d in neg_regular['the_date']]
+                                        
+                                        hover_text = [
+                                            f"{w}<br>{d.date()}<br>Share: {y:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
+                                            for d, y, z, imp in zip(
+                                                neg_regular['the_date'], 
+                                                neg_y,
+                                                neg_regular['nat_z_score'].fillna(0),
+                                                neg_regular['impact'].fillna(0)
+                                            )
+                                        ]
+                                        fig.add_trace(go.Scatter(
+                                            x=neg_regular['the_date'],
+                                            y=neg_y,
+                                            mode='markers',
+                                            name=f'{w} outlier (-)',
+                                            marker=dict(
+                                                symbol='line-ew', 
+                                                color='red', 
+                                                size=12, 
+                                                line=dict(color='darkred', width=1),
+                                                opacity=0.85
+                                            ),
+                                            showlegend=False,
+                                            hoverinfo='text',
+                                            hovertext=hover_text
+                                        ))
+                                    
+                                    # Egregious negative outliers (if any - rare)
+                                    if not neg_egregious.empty:
+                                        neg_y = [smooth_series.get(d, (neg_egregious.loc[neg_egregious['the_date']==d, 'win_share'].iloc[0] * 100)) 
+                                                 for d in neg_egregious['the_date']]
+                                        
+                                        hover_text = [
+                                            f"⚠️ EGREGIOUS DROP: {w}<br>{d.date()}<br>Share: {y:.4f}%<br>Impact: {int(imp)}"
+                                            for d, y, imp in zip(
+                                                neg_egregious['the_date'], 
+                                                neg_y,
+                                                neg_egregious['impact'].fillna(0)
+                                            )
+                                        ]
+                                        fig.add_trace(go.Scatter(
+                                            x=neg_egregious['the_date'],
+                                            y=neg_y,
+                                            mode='markers',
+                                            name=f'⚠️ {w} EGREGIOUS DROP',
+                                            marker=dict(
+                                                symbol='diamond', 
+                                                color='purple', 
+                                                size=15, 
+                                                line=dict(color='black', width=2),
+                                                opacity=1.0
+                                            ),
+                                            showlegend=True,
+                                            hoverinfo='text',
+                                            hovertext=hover_text
+                                        ))
                     
                     fig.update_layout(
                         title=dict(text=f'National Win Share - {ds} {"Mover" if mover_ind else "Non-Mover"}', x=0.01, xanchor='left'),

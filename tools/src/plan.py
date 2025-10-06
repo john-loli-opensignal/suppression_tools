@@ -11,6 +11,7 @@ def get_top_n_carriers(
     ds: str, 
     mover_ind: bool, 
     n: int = 50,
+    min_share_pct: float = 0.0,
     db_path: Optional[str] = None
 ) -> List[str]:
     """Get top N carriers by total wins over entire time series.
@@ -19,6 +20,7 @@ def get_top_n_carriers(
         ds: Dataset name (e.g., 'gamoshi')
         mover_ind: True for movers, False for non-movers
         n: Number of top carriers to return
+        min_share_pct: Minimum overall share % (0.0 = no filter)
         db_path: Path to database (uses default if None)
         
     Returns:
@@ -33,13 +35,42 @@ def get_top_n_carriers(
     
     cube_table = f"{ds}_win_{'mover' if mover_ind else 'non_mover'}_cube"
     
-    sql = f"""
-        SELECT winner, SUM(total_wins) as total
-        FROM {cube_table}
-        GROUP BY winner
-        ORDER BY total DESC
-        LIMIT {n}
-    """
+    # Apply share filter if specified
+    if min_share_pct > 0:
+        sql = f"""
+            WITH total_wins AS (
+                SELECT 
+                    winner,
+                    SUM(total_wins) as total
+                FROM {cube_table}
+                GROUP BY winner
+            ),
+            market_total AS (
+                SELECT SUM(total) as market_total
+                FROM total_wins
+            ),
+            with_share AS (
+                SELECT 
+                    t.winner,
+                    t.total,
+                    t.total * 100.0 / m.market_total as overall_share_pct
+                FROM total_wins t
+                CROSS JOIN market_total m
+            )
+            SELECT winner
+            FROM with_share
+            WHERE overall_share_pct >= {min_share_pct}
+            ORDER BY total DESC
+            LIMIT {n}
+        """
+    else:
+        sql = f"""
+            SELECT winner, SUM(total_wins) as total
+            FROM {cube_table}
+            GROUP BY winner
+            ORDER BY total DESC
+            LIMIT {n}
+        """
     df = db.query(sql, db_path)
     return df['winner'].tolist()
 
@@ -115,6 +146,7 @@ def scan_base_outliers(
     end_date: str,
     z_threshold: float = 2.5,
     top_n: int = 50,
+    min_share_pct: float = 0.0,
     egregious_threshold: int = 40,
     db_path: Optional[str] = None
 ) -> pd.DataFrame:
@@ -126,7 +158,7 @@ def scan_base_outliers(
     - Fall back to 4d window (minimum threshold)
     - Then filter results to the graph window (start_date to end_date)
     
-    Focuses on top N carriers, but flags egregious outliers outside top N.
+    Focuses on top N carriers (with optional min share %), but flags egregious outliers outside top N.
     
     Args:
         ds: Dataset name
@@ -135,6 +167,7 @@ def scan_base_outliers(
         end_date: End date for graph window
         z_threshold: Z-score threshold for outlier detection
         top_n: Number of top carriers to focus on
+        min_share_pct: Minimum overall share % (0.0 = no filter)
         egregious_threshold: Impact threshold for non-top-N carriers
         db_path: Path to database
         
@@ -148,8 +181,8 @@ def scan_base_outliers(
     assert db_path.endswith('data/databases/duck_suppression.db'), \
         f"ERROR: Wrong database path: {db_path}. Must use data/databases/duck_suppression.db"
     
-    # Get top N carriers
-    top_carriers = get_top_n_carriers(ds, mover_ind, top_n, db_path)
+    # Get top N carriers (with optional share filter)
+    top_carriers = get_top_n_carriers(ds, mover_ind, top_n, min_share_pct, db_path)
     top_carriers_str = ','.join([f"'{c}'" for c in top_carriers])
     
     cube_table = f"{ds}_win_{'mover' if mover_ind else 'non_mover'}_cube"
