@@ -233,5 +233,18 @@
       ],
       "documentation": "analysis/competitor_view_enhancements.md"
     }
+  },
+  "outlier_marker_fixes": {
+    "date": "2025-10-06",
+    "commit": "1a025f2",
+    "problem": "Negative outliers weren't being detected correctly when 'All' mode was selected",
+    "root_cause": "Z-score calculation used ABS() which removed the sign, making it impossible to distinguish positive from negative outliers",
+    "solution": {
+      "z_score_calculation": "Changed from ABS(value - mu) / sigma to (value - mu) / sigma to preserve sign",
+      "outlier_detection": "Still uses ABS(z-score) > threshold for detection, so both positive and negative outliers are caught",
+      "marker_symbol": "Changed negative outlier marker from 'line-ew' to 'triangle-down' (red) for better visibility"
+    },
+    "example": "2025-07-21: AT&T vs Cox had z=-3.33 on losses, now correctly flagged and shown with red triangle-down marker",
+    "location": "tools/db.py::national_outliers_from_cube() and carrier_dashboard_duckdb.py::create_plot()"
   }
 }
