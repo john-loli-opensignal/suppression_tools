@@ -40,7 +40,11 @@ Suggested Local Config
   - Test scripts → `analysis/`
   - Markdown reports → `analysis/`
 - **NEVER** create temporary files in project root
+- **ALWAYS** create a subdirectory in `analysis/` for each analysis task
+  - Example: `analysis/ezee_fiber_houston/` for specific analysis
+  - Example: `analysis/outlier_test_june/` for outlier testing
 - Clean up temporary files on exit or crash
+- Move completed analysis reports to `docs/` if they are final
 
 ### Project Organization
 - Keep project root minimal: only essential config files and main dashboards
