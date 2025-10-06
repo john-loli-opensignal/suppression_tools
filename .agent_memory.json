@@ -160,8 +160,16 @@
     },
     "top_50_filter": {
       "scope": "Total wins over entire time series",
+      "default": "Top 25 carriers (changed from 50 on 2025-10-05)",
+      "min_share_pct": "Optional filter: >= 0.5% overall share (default)",
+      "impact_with_filter": "Top 25 with 0.5% share = ~20 carriers",
       "egregious_threshold": 40,
-      "note": "Focus on top 50, but flag outliers with 40+ impact outside"
+      "egregious_visualization": "Orange diamonds with bold borders in graph",
+      "note": "Focus on top N (with optional share filter), but flag outliers with 40+ impact outside",
+      "functions": {
+        "get_top_n_carriers": "Supports min_share_pct parameter",
+        "scan_base_outliers": "Supports min_share_pct parameter"
+      }
     }
   },
   "performance": {
@@ -285,6 +293,40 @@
     {
       "date": "2025-10-05",
       "updates": {
+        "top_25_plus_egregious_filter": {
+          "issue": "Too many carriers (top 50) cluttered graph. Need better filtering + highlighting of egregious outliers",
+          "requirements": [
+            "Default to top 25 carriers (not 50)",
+            "Add optional min share % filter (default 0.5%)",
+            "Make egregious outliers stand out visually",
+            "Keep egregious threshold configurable (default 40)"
+          ],
+          "implementation": {
+            "get_top_n_carriers": "Added min_share_pct parameter with SQL filtering",
+            "scan_base_outliers": "Added min_share_pct parameter, passes to get_top_n_carriers",
+            "main.py": {
+              "advanced_filters": "Added expandable section with min share % slider",
+              "default_top_n": "Changed from 50 to 25",
+              "egregious_markers": {
+                "positive": "Orange diamonds, size=15, bold red border, shown in legend",
+                "negative": "Purple diamonds, size=15, bold black border (rare)",
+                "regular": "Yellow stars (positive) or red lines (negative), size=11-12, not in legend"
+              }
+            }
+          },
+          "test_results": {
+            "top_25_no_filter": "25 carriers (all)",
+            "top_25_with_0.5pct": "20 carriers (only those with >= 0.5% share)",
+            "top_50_with_0.5pct": "20 carriers (limit is share, not N)"
+          },
+          "visual_hierarchy": [
+            "1. Base lines - All carriers in ranked color order",
+            "2. Egregious outliers - Large orange/purple diamonds IN LEGEND",
+            "3. Regular outliers - Yellow stars/red lines, not in legend"
+          ],
+          "key_insight": "With 0.5% share threshold, top 25 → ~20 carriers. Cleaner visualization. Egregious outliers pop out visually.",
+          "commit": "b6cc1e8: feat(main): add top 25 + min share filter with egregious outlier highlighting"
+        },
         "main_py_ux_refactor": {
           "issue": "Base graph disappeared when clicking 'Scan for Outliers'. Spectrum and major carriers missing from scan results.",
           "root_causes": [
