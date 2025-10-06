@@ -528,9 +528,16 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
         # Share mode: use the metric directly (win_share, loss_share, wins_per_loss)
         zscore_metric = metric
     
+    # Verify the metric column exists
+    if zscore_metric not in base.columns:
+        st.warning(f"Metric column '{zscore_metric}' not found in data. Available columns: {base.columns.tolist()}")
+        base['zscore'] = 0
+        base['is_outlier'] = False
+        return base
+    
     # Compute outliers inline (day-type grouped z-score)
     def _z_for_group(g):
-        g = g.sort_values('the_date')
+        g = g.sort_values('the_date').copy()
         g['day_type'] = g['the_date'].apply(lambda d: 'Sat' if pd.Timestamp(d).weekday() == 5
                                             else 'Sun' if pd.Timestamp(d).weekday() == 6
                                             else 'Weekday')
@@ -539,13 +546,25 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
         
         for dt in g['day_type'].unique():
             mask = g['day_type'] == dt
-            vals = g.loc[mask, zscore_metric]  # Use appropriate metric for outlier detection
-            if len(vals) > 1:
+            # Explicitly extract as Series with copy to avoid issues
+            vals = g.loc[mask, zscore_metric].copy()
+            
+            # Ensure vals is numeric
+            vals = pd.to_numeric(vals, errors='coerce')
+            
+            if len(vals) > 1 and vals.notna().sum() > 0:
                 mu = vals.shift(1).rolling(window, min_periods=1).mean()
                 sigma = vals.shift(1).rolling(window, min_periods=1).std()
                 z = (vals - mu) / sigma.replace(0, pd.NA)
                 g.loc[mask, 'zscore'] = z.fillna(0)
-                g.loc[mask, 'is_outlier'] = (z.abs() > z_thresh)
+                
+                # Use absolute value for threshold check if direction is "all"
+                if outlier_direction == "all":
+                    g.loc[mask, 'is_outlier'] = (z.abs() > z_thresh)
+                elif outlier_direction == "positive":
+                    g.loc[mask, 'is_outlier'] = (z > z_thresh)
+                elif outlier_direction == "negative":
+                    g.loc[mask, 'is_outlier'] = (z < -z_thresh)
         
         return g
     
