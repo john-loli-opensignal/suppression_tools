@@ -412,8 +412,9 @@ def build_enriched_cube(
                     ELSE CAST(total_wins AS INTEGER)  -- First appearances: all wins are "excess"
                 END as pair_impact
             FROM {rolling_view}
-            WHERE total_wins >= 5  -- Minimum volume filter
-                AND selected_window IS NOT NULL  -- Only include dates with valid rolling metrics
+            WHERE selected_window IS NOT NULL  -- Only include dates with valid rolling metrics
+                -- Note: No volume filter here - we need all pairs for carriers with national outliers
+                -- Volume filtering happens in plan building (auto stage) and distributed stage
         ),
         -- National aggregation for context (aggregate across all DMAs)
         national_daily AS (
