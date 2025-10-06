@@ -282,5 +282,41 @@
       "commit": "8fca684",
       "impact": "ALL historical loss metrics in competitor view were incorrect before this fix"
     }
+  },
+  "smoothing_behavior": {
+    "current_implementation": {
+      "window": 3,
+      "method": "rolling mean with center=True",
+      "formula": "series.rolling(window=3, center=True, min_periods=1).mean()",
+      "location": "carrier_dashboard_duckdb.py::create_plot() line 105",
+      "toggle": "st.session_state.smoothing (sidebar checkbox)",
+      "default": true
+    },
+    "user_request": {
+      "preferred_window_for_wpl": 7,
+      "rationale": "WPL is a fincky metric that benefits from longer rolling windows to stabilize volatility",
+      "note": "Current 3-day smoothing may not be sufficient for WPL"
+    },
+    "tooltip_implementation": {
+      "wins_per_loss": {
+        "shows": ["Carrier name", "Date", "Wins (raw_wins)", "Losses (raw_losses)", "Ratio", "Smoothed (if enabled)"],
+        "columns_required": ["raw_wins", "raw_losses"],
+        "populated_by": "compute_competitor_pdf() lines 503-504",
+        "render_logic": "create_plot() lines 116-123",
+        "status": "✅ Working correctly"
+      },
+      "wins_volume": {
+        "shows": ["Carrier name", "Date", "Wins (with comma formatting)", "Smoothed (if enabled)"],
+        "format": "int(r):, for comma-separated thousands"
+      },
+      "losses_volume": {
+        "shows": ["Carrier name", "Date", "Losses (with comma formatting)", "Smoothed (if enabled)"],
+        "format": "int(r):, for comma-separated thousands"
+      },
+      "shares": {
+        "shows": ["Carrier name", "Date", "Value (6 decimal places)", "Smoothed (if enabled)"],
+        "format": "r:.6f"
+      }
+    }
   }
 }

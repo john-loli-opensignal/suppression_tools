@@ -37,6 +37,8 @@ def init_session_state():
         st.session_state.palette = 'Dark24'
     if 'smoothing' not in st.session_state:
         st.session_state.smoothing = True
+    if 'smoothing_window' not in st.session_state:
+        st.session_state.smoothing_window = 7  # Default to 7-day rolling mean for WPL
     if 'show_markers' not in st.session_state:
         st.session_state.show_markers = False
     if 'stacked' not in st.session_state:
@@ -86,6 +88,7 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
     color_map = {c: palette[i % len(palette)] for i, c in enumerate([c for c in carriers if c != 'Other'])}
 
     smoothing_on = st.session_state.get('smoothing', True)
+    smoothing_window = st.session_state.get('smoothing_window', 7)
     show_markers = st.session_state.get('show_markers', False)
     stacked = st.session_state.get('stacked', False)
     display_mode = st.session_state.get('display_mode', 'share')
@@ -101,8 +104,8 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
             series = pd.to_numeric(cdf[metric], errors='coerce').fillna(0)
         dates = cdf['the_date']
 
-        if smoothing_on and len(series) >= 3:
-            smooth = series.rolling(window=3, center=True, min_periods=1).mean()
+        if smoothing_on and len(series) >= smoothing_window:
+            smooth = series.rolling(window=smoothing_window, center=True, min_periods=1).mean()
         else:
             smooth = series
 
@@ -696,6 +699,14 @@ def main():
             st.session_state.show_other = st.checkbox("Show 'Other' carriers", value=st.session_state.show_other)
             st.session_state.stacked = st.checkbox("Stacked (fill) view", value=st.session_state.stacked)
         st.session_state.smoothing = st.checkbox("Smoothing (rolling mean)", value=st.session_state.smoothing)
+        if st.session_state.smoothing:
+            st.session_state.smoothing_window = st.slider(
+                "Smoothing window (days)", 
+                min_value=1, 
+                max_value=28, 
+                value=st.session_state.smoothing_window,
+                help="Number of days for rolling mean calculation. 7-day recommended for WPL."
+            )
         st.session_state.show_markers = st.checkbox("Show markers", value=st.session_state.show_markers)
         palette_options = ["Plotly", "D3", "G10", "Dark24", "Safe"]
         st.session_state.palette = st.selectbox("Color palette", options=palette_options, index=palette_options.index(st.session_state.palette) if st.session_state.palette in palette_options else 3)
