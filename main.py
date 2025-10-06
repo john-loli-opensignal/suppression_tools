@@ -92,7 +92,7 @@ def ui():
                         hovermode='x unified',
                         legend=dict(orientation='v', yanchor='top', y=1, xanchor='left', x=1.02)
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                     st.success(f'✅ Loaded {len(ts):,} data points for {len(winners)} carriers')
             except Exception as e:
                 st.error(f'Failed to load base graph: {e}')
@@ -139,7 +139,7 @@ def ui():
                 display_df = outliers_df[['the_date', 'winner', 'nat_z_score', 'impact', 'nat_total_wins', 'nat_mu_wins']].copy()
                 display_df['nat_z_score'] = display_df['nat_z_score'].round(2)
                 display_df = display_df.sort_values(['the_date', 'nat_z_score'], ascending=[True, False])
-                st.dataframe(display_df, use_container_width=True)
+                st.dataframe(display_df, width='stretch')
                 
         except Exception as e:
             st.error(f'Outlier scan failed: {e}')
@@ -393,7 +393,7 @@ def ui():
                                 display_cols = [c for c in display_cols if c in display_plan.columns]
                                 display_plan = display_plan[display_cols]
                                 
-                                st.dataframe(display_plan, use_container_width=True)
+                                st.dataframe(display_plan, width='stretch')
                                 st.success('✅ Suppression plan generated successfully!')
                             else:
                                 st.warning('⚠️  No suppression plan rows were generated from the outliers.')
@@ -597,7 +597,7 @@ def ui():
                             )
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, width='stretch')
                         
                         # Show summary stats
                         total_base = base_series.groupby('winner')['total_wins'].sum()
@@ -613,7 +613,7 @@ def ui():
                         }).sort_values('Removed', ascending=False)
                         
                         st.subheader('Suppression Summary')
-                        st.dataframe(summary, use_container_width=True)
+                        st.dataframe(summary, width='stretch')
                         st.success('✅ Preview generated! Solid lines = base, dashed lines = suppressed (click legend to toggle)')
                         
             except Exception as e:

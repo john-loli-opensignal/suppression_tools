@@ -188,11 +188,15 @@ def scan_base_outliers(
                 nat_mu_wins,
                 nat_sigma_wins,
                 CASE 
-                    WHEN nat_sigma_wins > 0 THEN 
+                    WHEN nat_sigma_wins > 0 AND nat_mu_wins IS NOT NULL THEN 
                         (nat_total_wins - nat_mu_wins) / nat_sigma_wins
                     ELSE 0 
                 END as nat_z_score,
-                CAST(nat_total_wins - nat_mu_wins AS INTEGER) as impact
+                CASE 
+                    WHEN nat_mu_wins IS NOT NULL THEN 
+                        CAST(nat_total_wins - nat_mu_wins AS INTEGER)
+                    ELSE 0
+                END as impact
             FROM with_rolling
         )
         SELECT 
@@ -325,12 +329,16 @@ def build_enriched_cube(
             n.nat_sigma_share,
             -- National z-score
             CASE 
-                WHEN n.nat_sigma_wins > 0 THEN 
+                WHEN n.nat_sigma_wins > 0 AND n.nat_mu_wins IS NOT NULL THEN 
                     (n.nat_total_wins - n.nat_mu_wins) / n.nat_sigma_wins
                 ELSE 0 
             END as nat_z_score,
             -- Impact (excess over baseline)
-            CAST(n.nat_total_wins - COALESCE(n.nat_mu_wins, 0) AS INTEGER) as impact
+            CASE 
+                WHEN n.nat_mu_wins IS NOT NULL THEN 
+                    CAST(n.nat_total_wins - n.nat_mu_wins AS INTEGER)
+                ELSE 0
+            END as impact
         FROM pair_level p
         JOIN national_rolling n ON p.the_date = n.the_date AND p.winner = n.winner
         ORDER BY p.the_date, p.winner, p.dma_name, p.loser

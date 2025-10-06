@@ -55,3 +55,15 @@ Suggested Local Config
   - `analysis/` - All analysis work
   - `tests/` - Test files
 
+### Git Workflow Reminders
+- **ALWAYS work on `codex-agent` branch**
+- Check current branch before making commits: `git branch --show-current`
+- Commit frequently with clear, focused commits
+- Use conventional commit format: `<type>(scope): description`
+- Push regularly to keep remote updated
+
+### TODO - Future Enhancements
+- [ ] Census block level outlier detection (current: DMA level only)
+- [ ] Docker containerization for n8n agent integration
+- [ ] API endpoint exposure for external tool integration
+
