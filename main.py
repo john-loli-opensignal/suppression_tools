@@ -129,8 +129,8 @@ def ui():
                             on=['the_date', 'winner'],
                             how='left'
                         )
-                        ts_with_outliers['is_outlier'] = ts_with_outliers['is_outlier'].fillna(False)
-                        ts_with_outliers['is_egregious'] = ts_with_outliers['is_egregious'].fillna(False)
+                        ts_with_outliers['is_outlier'] = ts_with_outliers['is_outlier'].fillna(False).infer_objects(copy=False)
+                        ts_with_outliers['is_egregious'] = ts_with_outliers['is_egregious'].fillna(False).infer_objects(copy=False)
                     else:
                         ts_with_outliers = ts_copy.copy()
                         ts_with_outliers['is_outlier'] = False
@@ -335,7 +335,7 @@ def ui():
                         legend=dict(orientation='v', x=1.02, y=0.5),
                         margin=dict(l=40, r=200, t=80, b=40)
                     )
-                    st.plotly_chart(fig, use_container_width=False)
+                    st.plotly_chart(fig, config={'displayModeBar': True, 'displaylogo': False})
                 except Exception as e:
                     st.error(f'Failed to create graph: {e}')
                     import traceback
@@ -805,7 +805,7 @@ def ui():
                             on=['the_date', 'winner', 'loser', 'dma_name'],
                             how='left'
                         )
-                        pair_suppressed['remove_units'] = pair_suppressed['remove_units'].fillna(0)
+                        pair_suppressed['remove_units'] = pair_suppressed['remove_units'].fillna(0).infer_objects(copy=False)
                         
                         # Apply suppressions
                         pair_suppressed['suppressed_wins'] = np.maximum(
@@ -929,7 +929,7 @@ def ui():
                             margin=dict(l=40, r=250, t=100, b=40)
                         )
                         
-                        st.plotly_chart(fig, use_container_width=False)
+                        st.plotly_chart(fig, config={'displayModeBar': True, 'displaylogo': False})
                         
                         # Show summary stats
                         total_base = base_series.groupby('winner')['total_wins'].sum()

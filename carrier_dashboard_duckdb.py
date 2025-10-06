@@ -755,7 +755,7 @@ def main():
             st.session_state.analysis_mode,
             primary=st.session_state.primary_carrier,
         )
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, config={'displayModeBar': True, 'displaylogo': False})
 
     # Indicate pending changes since last run
     try:
@@ -795,20 +795,21 @@ def main():
             st.write(f"Primary: {st.session_state.primary_carrier or 'None'}")
             st.write(f"Competitors: {', '.join(st.session_state.competitor_carrier) if st.session_state.competitor_carrier else 'None'}")
 
-        # Small outliers table beneath the summary
-        try:
-            if isinstance(pdf, pd.DataFrame) and not pdf.empty and 'is_outlier' in pdf.columns:
-                out = pdf[pdf['is_outlier'] == True].copy()
-                if not out.empty:
-                    if st.session_state.get('outlier_show', 'All') == 'Positive only':
-                        out = out[out['zscore'] >= 0]
-                    cols_pref = ['the_date', 'winner', st.session_state.metric, 'zscore', 'day_type']
-                    cols = [c for c in cols_pref if c in out.columns]
-                    out = out[cols].sort_values(['the_date', 'winner'], ascending=[True, False])
-                    st.markdown("**Outliers (sorted by date, carrier desc)**")
-                    st.dataframe(out.head(50), width='stretch')
-        except Exception:
-            pass
+    # Outliers table - FULL WIDTH UNDER THE GRAPH
+    try:
+        if isinstance(pdf, pd.DataFrame) and not pdf.empty and 'is_outlier' in pdf.columns:
+            out = pdf[pdf['is_outlier'] == True].copy()
+            if not out.empty:
+                if st.session_state.get('outlier_show', 'All') == 'Positive only':
+                    out = out[out['zscore'] >= 0]
+                cols_pref = ['the_date', 'winner', st.session_state.metric, 'zscore', 'day_type']
+                cols = [c for c in cols_pref if c in out.columns]
+                out = out[cols].sort_values(['the_date', 'winner'], ascending=[True, False])
+                st.markdown("---")
+                st.markdown("**📊 Outliers (sorted by date, carrier desc)**")
+                st.dataframe(out.head(50), use_container_width=True)
+    except Exception:
+        pass
 
     # Optional: Top N preview in sidebar like v2
     if st.session_state.analysis_mode == "National" and st.session_state.selection_mode == "Top N Carriers":
