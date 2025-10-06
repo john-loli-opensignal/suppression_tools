@@ -150,12 +150,27 @@ def ui():
                     )
                     
                     if not ts.empty:
+                        # Merge outlier flags into time series for proper alignment
+                        ts_copy = ts.copy()
+                        ts_copy['the_date'] = pd.to_datetime(ts_copy['the_date'])
+                        
+                        outliers_copy = outliers_df.copy()
+                        outliers_copy['the_date'] = pd.to_datetime(outliers_copy['the_date'])
+                        outliers_copy['is_outlier'] = True
+                        
+                        ts_with_outliers = ts_copy.merge(
+                            outliers_copy[['the_date', 'winner', 'is_outlier', 'nat_z_score', 'impact']],
+                            on=['the_date', 'winner'],
+                            how='left'
+                        )
+                        ts_with_outliers['is_outlier'] = ts_with_outliers['is_outlier'].fillna(False)
+                        
                         # Create figure
                         fig = go.Figure()
                         
                         # Add base lines for each carrier
                         for w in sorted(flagged_carriers):
-                            sub = ts[ts['winner'] == w]
+                            sub = ts_with_outliers[ts_with_outliers['winner'] == w]
                             fig.add_trace(go.Scatter(
                                 x=sub['the_date'],
                                 y=sub['win_share'] * 100,
@@ -164,23 +179,37 @@ def ui():
                                 line=dict(width=2)
                             ))
                         
-                        # Add outlier markers
-                        outlier_markers = outliers_df.copy()
-                        outlier_markers['the_date'] = pd.to_datetime(outlier_markers['the_date'])
-                        outlier_markers['win_share_pct'] = outlier_markers['nat_share_current'] * 100
-                        
+                        # Add outlier markers (stars for positive outliers)
                         for w in sorted(flagged_carriers):
-                            outlier_sub = outlier_markers[outlier_markers['winner'] == w]
+                            outlier_sub = ts_with_outliers[
+                                (ts_with_outliers['winner'] == w) & 
+                                (ts_with_outliers['is_outlier'] == True)
+                            ]
                             if not outlier_sub.empty:
+                                hover_text = [
+                                    f"{w}<br>Date: {d.date()}<br>Share: {s*100:.2f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
+                                    for d, s, z, imp in zip(
+                                        outlier_sub['the_date'], 
+                                        outlier_sub['win_share'],
+                                        outlier_sub['nat_z_score'].fillna(0),
+                                        outlier_sub['impact'].fillna(0)
+                                    )
+                                ]
                                 fig.add_trace(go.Scatter(
                                     x=outlier_sub['the_date'],
-                                    y=outlier_sub['win_share_pct'],
+                                    y=outlier_sub['win_share'] * 100,
                                     mode='markers',
                                     name=f'{w} (outlier)',
-                                    marker=dict(size=10, symbol='x', line=dict(width=2)),
+                                    marker=dict(
+                                        symbol='star', 
+                                        color='yellow', 
+                                        size=12, 
+                                        line=dict(color='black', width=1),
+                                        opacity=0.95
+                                    ),
                                     showlegend=False,
-                                    hovertemplate=f'{w}<br>Date: %{{x}}<br>Share: %{{y:.2f}}%<br>Z-score: %{{customdata:.2f}}<extra></extra>',
-                                    customdata=outlier_sub['nat_z_score']
+                                    hoverinfo='text',
+                                    hovertext=hover_text
                                 ))
                         
                         fig.update_layout(
@@ -193,13 +222,18 @@ def ui():
                             legend=dict(orientation='v', yanchor='top', y=1, xanchor='left', x=1.02)
                         )
                         
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, config={'displayModeBar': False})
                 except Exception as e:
                     st.warning(f'Could not generate outlier graph: {e}')
+                    import traceback
+                    with st.expander('Show traceback'):
+                        st.code(traceback.format_exc())
                 
                 # Display outliers table
-                display_df = outliers_df[['the_date', 'winner', 'nat_z_score', 'impact', 'nat_total_wins', 'nat_mu_wins']].copy()
+                display_df = outliers_df[['the_date', 'winner', 'nat_z_score', 'impact', 'nat_total_wins', 'nat_mu_wins', 'nat_share_current']].copy()
                 display_df['nat_z_score'] = display_df['nat_z_score'].round(2)
+                display_df['nat_share_current'] = (display_df['nat_share_current'] * 100).round(2)  # Convert to percentage
+                display_df = display_df.rename(columns={'nat_share_current': 'win_share_pct'})
                 display_df = display_df.sort_values(['the_date', 'nat_z_score'], ascending=[True, False])
                 st.dataframe(display_df, width='stretch')
                 

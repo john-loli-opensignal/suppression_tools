@@ -266,10 +266,12 @@ def scan_base_outliers(
                 dow,
                 winner,
                 nat_total_wins,
+                nat_market_wins,
                 nat_mu_wins,
                 nat_sigma_wins,
                 n_periods,
                 selected_window,
+                nat_total_wins * 1.0 / NULLIF(nat_market_wins, 0) as nat_share_current,
                 CASE 
                     WHEN nat_sigma_wins > 0 AND nat_mu_wins IS NOT NULL AND NOT isnan(nat_mu_wins) THEN 
                         (nat_total_wins - nat_mu_wins) / nat_sigma_wins
@@ -289,8 +291,10 @@ def scan_base_outliers(
             impact,
             nat_total_wins,
             nat_mu_wins,
+            nat_share_current,
             n_periods,
-            selected_window
+            selected_window,
+            dow as day_of_week
         FROM with_zscore
         WHERE the_date BETWEEN '{start_date}' AND '{end_date}'  -- Filter to graph window at the end
             AND selected_window IS NOT NULL  -- Only include dates with valid rolling metrics
