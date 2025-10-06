@@ -44,13 +44,14 @@ def ui():
     st.subheader('0️⃣ Preview Base Graph (Unsuppressed)')
     st.caption('View national win share for selected carriers using database cubes.')
     
-    # Get top carriers automatically
+    # Get top carriers automatically and rank them
     try:
         top_carriers = get_top_n_carriers(ds, mover_ind, n=top_n, db_path=db_path)
         default_winners = ", ".join(top_carriers[:10])  # Show top 10 as default
     except Exception as e:
         st.error(f"Error loading top carriers: {e}")
         default_winners = "Spectrum, Comcast, T-Mobile FWA, AT&T, Verizon FWA"
+        top_carriers = []
     
     winners_text = st.text_input('Winners (comma-separated, or leave for auto top 10)', value=default_winners)
     winners = [w.strip() for w in winners_text.split(',') if w.strip()]
@@ -73,13 +74,16 @@ def ui():
                 if ts.empty:
                     st.warning('No data found for selected winners in this date range.')
                 else:
+                    # Get total wins for each carrier to rank them
+                    carrier_totals = ts.groupby('winner')['total_wins'].sum().sort_values(ascending=False)
+                    carriers_ranked = carrier_totals.index.tolist()
+                    
                     # Use the same palette from carrier dashboard
                     palette = px.colors.qualitative.Dark24
-                    carriers = sorted(ts['winner'].unique())
-                    color_map = {c: palette[i % len(palette)] for i, c in enumerate(carriers)}
+                    color_map = {c: palette[i % len(palette)] for i, c in enumerate(carriers_ranked)}
                     
                     fig = go.Figure()
-                    for w in carriers:
+                    for w in carriers_ranked:
                         sub = ts[ts['winner'] == w].sort_values('the_date')
                         series = sub['win_share'] * 100  # Convert to percentage
                         
@@ -172,6 +176,10 @@ def ui():
                     )
                     
                     if not ts.empty:
+                        # Rank carriers by total wins
+                        carrier_totals = ts.groupby('winner')['total_wins'].sum().sort_values(ascending=False)
+                        carriers_ranked = carrier_totals.index.tolist()
+                        
                         # Merge outlier flags into time series for proper alignment
                         ts_copy = ts.copy()
                         ts_copy['the_date'] = pd.to_datetime(ts_copy['the_date'])
@@ -187,15 +195,18 @@ def ui():
                         )
                         ts_with_outliers['is_outlier'] = ts_with_outliers['is_outlier'].fillna(False)
                         
-                        # Use same color palette
+                        # Use same color palette with ranking
                         palette = px.colors.qualitative.Dark24
-                        color_map = {c: palette[i % len(palette)] for i, c in enumerate(flagged_carriers)}
+                        color_map = {c: palette[i % len(palette)] for i, c in enumerate(carriers_ranked)}
                         
                         # Create figure
                         fig = go.Figure()
                         
+                        # Store smoothed series for each carrier (for marker alignment)
+                        carrier_smoothed = {}
+                        
                         # Add base lines for each carrier with smoothing
-                        for w in sorted(flagged_carriers):
+                        for w in carriers_ranked:
                             sub = ts_with_outliers[ts_with_outliers['winner'] == w].sort_values('the_date')
                             series = sub['win_share'] * 100  # Convert to percentage
                             
@@ -204,6 +215,10 @@ def ui():
                                 smooth = series.rolling(window=3, center=True, min_periods=1).mean()
                             else:
                                 smooth = series
+                            
+                            # Store for marker positioning
+                            carrier_smoothed[w] = smooth.copy()
+                            carrier_smoothed[w].index = sub['the_date']
                             
                             # Create hover text
                             raw_vals = series.round(4).astype(str)
@@ -223,19 +238,15 @@ def ui():
                                 hovertext=hover_text
                             ))
                         
-                        # Add outlier markers - separate positive and negative
-                        for w in sorted(flagged_carriers):
+                        # Add outlier markers - use pre-computed smoothed values
+                        for w in carriers_ranked:
                             outlier_sub = ts_with_outliers[
                                 (ts_with_outliers['winner'] == w) & 
                                 (ts_with_outliers['is_outlier'] == True)
                             ]
                             if not outlier_sub.empty:
-                                # Get smoothed values for marker positioning
-                                series = outlier_sub['win_share'] * 100
-                                if len(series) >= 3:
-                                    y_marker = series.rolling(window=3, center=True, min_periods=1).mean()
-                                else:
-                                    y_marker = series
+                                # Get smoothed values from pre-computed series
+                                smooth_series = carrier_smoothed[w]
                                 
                                 # Split into positive and negative z-scores
                                 pos_out = outlier_sub[outlier_sub['nat_z_score'] >= 0]
@@ -243,15 +254,13 @@ def ui():
                                 
                                 # Positive outliers (yellow stars)
                                 if not pos_out.empty:
-                                    pos_series = pos_out['win_share'] * 100
-                                    if len(pos_series) >= 3:
-                                        pos_y = pos_series.rolling(window=3, center=True, min_periods=1).mean()
-                                    else:
-                                        pos_y = pos_series
+                                    # Get y values from smoothed series
+                                    pos_y = [smooth_series.get(d, (pos_out.loc[pos_out['the_date']==d, 'win_share'].iloc[0] * 100)) 
+                                             for d in pos_out['the_date']]
                                     
                                     hover_text = [
-                                        f"{w}<br>{d.date()}<br>Share: {s:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
-                                        for d, s, z, imp in zip(
+                                        f"{w}<br>{d.date()}<br>Share: {y:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
+                                        for d, y, z, imp in zip(
                                             pos_out['the_date'], 
                                             pos_y,
                                             pos_out['nat_z_score'].fillna(0),
@@ -277,15 +286,13 @@ def ui():
                                 
                                 # Negative outliers (red minus signs)
                                 if not neg_out.empty:
-                                    neg_series = neg_out['win_share'] * 100
-                                    if len(neg_series) >= 3:
-                                        neg_y = neg_series.rolling(window=3, center=True, min_periods=1).mean()
-                                    else:
-                                        neg_y = neg_series
+                                    # Get y values from smoothed series
+                                    neg_y = [smooth_series.get(d, (neg_out.loc[neg_out['the_date']==d, 'win_share'].iloc[0] * 100)) 
+                                             for d in neg_out['the_date']]
                                     
                                     hover_text = [
-                                        f"{w}<br>{d.date()}<br>Share: {s:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
-                                        for d, s, z, imp in zip(
+                                        f"{w}<br>{d.date()}<br>Share: {y:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
+                                        for d, y, z, imp in zip(
                                             neg_out['the_date'], 
                                             neg_y,
                                             neg_out['nat_z_score'].fillna(0),
