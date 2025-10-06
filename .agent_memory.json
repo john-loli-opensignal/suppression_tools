@@ -254,6 +254,19 @@
       "solution": "Added outlier_direction parameter to compute_competitor_pdf function signature and mapped st.session_state.outlier_show to outlier_direction when calling the function",
       "date": "2025-10-06",
       "commit": "475f946"
+    },
+    "competitor_view_inverted_logic": {
+      "issue": "Loss metrics showed wrong values (e.g., AT&T losses to Cox showed 17 instead of 36)",
+      "root_cause": "The h2h_losses and primary_totals_loss CTEs in competitor_view() had inverted winner/loser logic. For a carrier's losses, they should be the LOSER (not winner) in the loss cube.",
+      "solution": {
+        "h2h_losses": "Changed WHERE winner='primary' to WHERE loser='primary', changed SELECT loser to SELECT winner",
+        "primary_totals_loss": "Changed WHERE winner='primary' to WHERE loser='primary'",
+        "key_insight": "In loss cubes, the carrier being analyzed for losses should appear as the LOSER, not the winner"
+      },
+      "verification": "AT&T losses to Cox on 2025-07-21 now correctly shows 36.0 (was 17.0)",
+      "date": "2025-10-06",
+      "commit": "8fca684",
+      "impact": "ALL historical loss metrics in competitor view were incorrect before this fix"
     }
   }
 }
