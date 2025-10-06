@@ -385,7 +385,10 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
     if base.empty:
         return pd.DataFrame(columns=["the_date", "winner", metric])
     
-    # Get outliers (use share-based metrics for outlier detection even in volume mode)
+    # Get outliers (use display_mode to determine if we should calculate z-scores on volume or share)
+    # Determine cube_type based on metric
+    cube_type = 'loss' if 'loss' in metric else 'win'
+    
     outs = outliers.national_outliers(
         ds=_ds,
         mover_ind=_mover_ind,
@@ -395,7 +398,9 @@ def compute_national_pdf(db_path: str, filters: dict, selected_winners: list, sh
         z_thresh=z_thresh,
         state=_state,
         dma_name=_dma,
-        metric=db_metric,  # Use share-based metric for outlier detection
+        metric=db_metric,  # Keep for backwards compatibility
+        display_mode=display_mode,  # This controls whether z-scores are calculated on volume or share
+        cube_type=cube_type,  # Select win or loss cube based on metric
         db_path=db_path
     )
     

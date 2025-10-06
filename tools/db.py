@@ -491,6 +491,8 @@ def national_outliers_from_cube(
     end_date: Optional[str] = None,
     window: int = 14,
     z_thresh: float = 2.5,
+    metric: str = 'share',
+    cube_type: str = 'win',
     db_path: Optional[str] = None
 ) -> pd.DataFrame:
     """
@@ -505,6 +507,8 @@ def national_outliers_from_cube(
         end_date: End date (YYYY-MM-DD)
         window: Rolling window size in days (default: 14)
         z_thresh: Z-score threshold for outlier flagging (default: 2.5)
+        metric: 'share' for win_share or 'volume' for nat_wins (default: 'share')
+        cube_type: 'win' or 'loss' to select which cube table to use (default: 'win')
         db_path: Path to database file
         
     Returns:
@@ -518,11 +522,21 @@ def national_outliers_from_cube(
             start_date='2025-01-01',
             end_date='2025-01-31',
             window=14,
-            z_thresh=2.5
+            z_thresh=2.5,
+            metric='volume',  # Detect outliers in volume, not share
+            cube_type='loss'  # Look at losses instead of wins
         )
     """
     mover_str = "mover" if mover_ind else "non_mover"
-    cube_table = f"{ds}_win_{mover_str}_cube"
+    cube_table = f"{ds}_{cube_type}_{mover_str}_cube"
+    
+    # Column names differ between win and loss cubes
+    if cube_type == 'loss':
+        total_col = 'total_losses'
+        share_col = 'loss_share'
+    else:
+        total_col = 'total_wins'
+        share_col = 'win_share'
     
     date_filter = ""
     if start_date and end_date:
@@ -532,28 +546,39 @@ def national_outliers_from_cube(
     elif end_date:
         date_filter = f"AND w.the_date <= DATE '{end_date}'"
     
+    # Determine which column to use for z-score calculation
+    if cube_type == 'loss':
+        volume_col = 'nat_losses'
+        metric_col = 'nat_losses' if metric == 'volume' else 'loss_share'
+    else:
+        volume_col = 'nat_wins'
+        metric_col = 'nat_wins' if metric == 'volume' else 'win_share'
+    
+    # For loss cubes, use 'loser' instead of 'winner'
+    entity_col = 'loser' if cube_type == 'loss' else 'winner'
+    
     sql = f"""
     WITH daily_totals AS (
         SELECT 
             the_date,
-            winner,
+            {entity_col},
             day_of_week,
-            SUM(total_wins) as nat_wins
+            SUM({total_col}) as {volume_col}
         FROM {cube_table}
-        GROUP BY the_date, winner, day_of_week
+        GROUP BY the_date, {entity_col}, day_of_week
     ),
     market_totals AS (
-        SELECT the_date, SUM(nat_wins) as market_wins
+        SELECT the_date, SUM({volume_col}) as market_total
         FROM daily_totals
         GROUP BY the_date
     ),
     with_share AS (
         SELECT 
             d.the_date,
-            d.winner,
-            d.nat_wins,
-            m.market_wins,
-            d.nat_wins / NULLIF(m.market_wins, 0) as win_share,
+            d.{entity_col} as entity,
+            d.{volume_col},
+            m.market_total,
+            d.{volume_col} / NULLIF(m.market_total, 0) as {share_col},
             CASE 
                 WHEN d.day_of_week = 6 THEN 'Sat'
                 WHEN d.day_of_week = 0 THEN 'Sun'
@@ -565,18 +590,18 @@ def national_outliers_from_cube(
     with_stats AS (
         SELECT 
             the_date,
-            winner,
-            nat_wins,
-            market_wins,
-            win_share,
+            entity,
+            {volume_col},
+            market_total,
+            {share_col},
             day_type,
-            AVG(win_share) OVER (
-                PARTITION BY winner, day_type 
+            AVG({metric_col}) OVER (
+                PARTITION BY entity, day_type 
                 ORDER BY the_date 
                 ROWS BETWEEN {window} PRECEDING AND 1 PRECEDING
             ) as mu,
-            STDDEV_SAMP(win_share) OVER (
-                PARTITION BY winner, day_type 
+            STDDEV_SAMP({metric_col}) OVER (
+                PARTITION BY entity, day_type 
                 ORDER BY the_date 
                 ROWS BETWEEN {window} PRECEDING AND 1 PRECEDING
             ) as sigma
@@ -584,28 +609,34 @@ def national_outliers_from_cube(
     )
     SELECT 
         w.the_date,
-        w.winner,
-        w.nat_wins,
-        w.market_wins,
-        w.win_share,
+        w.entity as {entity_col},
+        w.{volume_col},
+        w.market_total,
+        w.{share_col},
         w.day_type,
-        w.mu as baseline_share,
+        w.mu as baseline_{'share' if metric == 'share' else 'volume'},
         w.sigma,
         CASE 
-            WHEN w.sigma > 0 THEN ABS(w.win_share - w.mu) / w.sigma
+            WHEN w.sigma > 0 THEN ABS({metric_col} - w.mu) / w.sigma
             ELSE 0
         END as zscore,
         CASE 
-            WHEN w.sigma > 0 AND ABS(w.win_share - w.mu) / w.sigma > {z_thresh}
+            WHEN w.sigma > 0 AND ABS({metric_col} - w.mu) / w.sigma > {z_thresh}
             THEN TRUE
             ELSE FALSE
         END as is_outlier
     FROM with_stats w
     WHERE 1=1 {date_filter}
-    ORDER BY the_date, winner
+    ORDER BY the_date, {entity_col}
     """
     
-    return query(sql, db_path)
+    result = query(sql, db_path)
+    
+    # Rename 'entity' back to 'winner' for consistency with existing code
+    if entity_col == 'loser' and 'loser' in result.columns:
+        result = result.rename(columns={'loser': 'winner'})
+    
+    return result
 
 
 def pair_outliers_from_cube(

@@ -43,6 +43,8 @@ def national_outliers(
     state: str | None = None,
     dma_name: str | None = None,
     metric: str = 'win_share',
+    display_mode: str = 'share',
+    cube_type: str = 'win',
     db_path: Optional[str] = None
 ) -> pd.DataFrame:
     """
@@ -59,7 +61,9 @@ def national_outliers(
         z_thresh: Z-score threshold (default: 2.5)
         state: Optional state filter
         dma_name: Optional DMA filter
-        metric: Metric to analyze (win_share, loss_share, wins_per_loss)
+        metric: Metric to analyze (win_share, loss_share, wins_per_loss) - DEPRECATED, use display_mode
+        display_mode: 'share' for share-based or 'volume' for volume-based outlier detection (default: 'share')
+        cube_type: 'win' or 'loss' to select which cube table to use (default: 'win')
         db_path: Optional database path
         
     Returns:
@@ -69,7 +73,7 @@ def national_outliers(
     if isinstance(mover_ind, str):
         mover_ind = (mover_ind == 'True')
     
-    # Use db module's function
+    # Use db module's function with proper metric parameter
     result = db.national_outliers_from_cube(
         ds=ds,
         mover_ind=mover_ind,
@@ -77,6 +81,8 @@ def national_outliers(
         end_date=end_date,
         window=window,
         z_thresh=z_thresh,
+        metric=display_mode,  # Pass display_mode as metric
+        cube_type=cube_type,  # Pass cube_type to select win or loss cube
         db_path=db_path
     )
     
