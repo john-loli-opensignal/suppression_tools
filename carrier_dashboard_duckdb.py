@@ -179,7 +179,7 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
                         showlegend=False,
                     ))
 
-                # Negative (minus signs)
+                # Negative (downward triangles)
                 if not neg_out.empty:
                     has_metric_n = metric in neg_out.columns
                     vals_neg = pd.to_numeric(neg_out[metric], errors='coerce') if has_metric_n else None
@@ -193,7 +193,7 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
                     fig.add_trace(go.Scatter(
                         x=neg_out['the_date'], y=y_marker_neg,
                         mode='markers', name=f"{carrier} outlier (-)",
-                        marker=dict(symbol='line-ew', color='red', size=12, line=dict(color='black', width=0.6), opacity=0.95),
+                        marker=dict(symbol='triangle-down', color='red', size=12, line=dict(color='black', width=0.6), opacity=0.95),
                         hoverinfo='text', hovertext=hover_o_neg,
                         showlegend=False,
                     ))

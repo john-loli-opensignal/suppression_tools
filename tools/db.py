@@ -617,11 +617,11 @@ def national_outliers_from_cube(
         w.mu as baseline_{'share' if metric == 'share' else 'volume'},
         w.sigma,
         CASE 
-            WHEN w.sigma > 0 THEN ABS({metric_col} - w.mu) / w.sigma
+            WHEN w.sigma > 0 THEN ({metric_col} - w.mu) / w.sigma
             ELSE 0
         END as zscore,
         CASE 
-            WHEN w.sigma > 0 AND ABS({metric_col} - w.mu) / w.sigma > {z_thresh}
+            WHEN w.sigma > 0 AND ABS(({metric_col} - w.mu) / w.sigma) > {z_thresh}
             THEN TRUE
             ELSE FALSE
         END as is_outlier
