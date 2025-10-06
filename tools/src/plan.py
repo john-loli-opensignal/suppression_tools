@@ -349,6 +349,9 @@ def build_enriched_cube(
     mover_ind: bool,
     start_date: str,
     end_date: str,
+    dma_z_threshold: float = 1.5,
+    dma_pct_threshold: float = 30.0,
+    rare_pair_impact_threshold: int = 15,
     db_path: Optional[str] = None
 ) -> pd.DataFrame:
     """Build enriched cube with all metrics needed for UI plan building.
@@ -361,6 +364,9 @@ def build_enriched_cube(
         mover_ind: True for movers, False for non-movers
         start_date: Start date for data
         end_date: End date for data
+        dma_z_threshold: Z-score threshold for DMA-level outliers (default: 1.5)
+        dma_pct_threshold: Percent change threshold for DMA-level outliers (default: 30.0)
+        rare_pair_impact_threshold: Impact threshold for rare pairs (default: 15)
         db_path: Path to database
         
     Returns:
@@ -392,14 +398,14 @@ def build_enriched_cube(
                 pct_change as pair_pct_change,
                 is_first_appearance as new_pair,
                 is_outlier as pair_outlier_pos,
-                CASE WHEN pct_change > 30 THEN true ELSE false END as pct_outlier_pos,
-                -- Rare pairs: Only if they have z-score violations AND impact > 15
+                CASE WHEN pct_change > {dma_pct_threshold} THEN true ELSE false END as pct_outlier_pos,
+                -- Rare pairs: Only if they have z-score violations AND impact > rare_pair_impact_threshold
                 CASE 
                     WHEN appearance_rank <= 5 
-                        AND zscore > 1.5 
+                        AND zscore > {dma_z_threshold}
                         AND avg_wins IS NOT NULL 
                         AND NOT isnan(avg_wins)
-                        AND (total_wins - avg_wins) > 15
+                        AND (total_wins - avg_wins) > {rare_pair_impact_threshold}
                     THEN true 
                     ELSE false 
                 END as rare_pair,

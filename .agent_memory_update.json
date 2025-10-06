@@ -1,0 +1,69 @@
+{
+  "critical_findings": {
+    "dashboard_outlier_discrepancy": {
+      "discovered": "2025-10-06",
+      "severity": "HIGH",
+      "issue": "carrier_dashboard_duckdb.py and main.py use different outlier detection logic",
+      "key_differences": [
+        "carrier_dashboard: Simple row-based rolling window (ROWS BETWEEN N PRECEDING)",
+        "main.py: DOW-partitioned tiered rolling window (28d→14d→4d) with minimum sample requirements",
+        "carrier_dashboard: Calculates rolling metrics only within graph window",
+        "main.py: Calculates rolling metrics over entire time series, filters to window",
+        "carrier_dashboard: No top N filtering (all carriers)",
+        "main.py: Top N filtering + egregious outliers (focused analysis)",
+        "carrier_dashboard: No share % threshold",
+        "main.py: Optional min_share_pct filter (default 0.5%)"
+      ],
+      "why_different_results": [
+        "carrier_dashboard has unstable baselines (limited history in window)",
+        "main.py has stable baselines (full historical context)",
+        "carrier_dashboard analyzes all carriers (noisy)",
+        "main.py analyzes top N only (focused on what matters)"
+      ],
+      "recommended_fix": {
+        "phase1": "Align carrier_dashboard to use same logic as main.py",
+        "phase2": "Add missing sliders to main.py (DMA z-score, DMA %, first appearance)",
+        "phase3": "Make view thresholds parameterized instead of hardcoded"
+      }
+    }
+  },
+  "missing_main_py_sliders": {
+    "dma_z_score_threshold": {
+      "currently": "hardcoded to 2.5 in gamoshi_win_mover_rolling view",
+      "should_be": "slider with range 0.5-5.0, default 1.5",
+      "used_in": "build_enriched_cube() for DMA-level outlier detection"
+    },
+    "dma_pct_change_threshold": {
+      "currently": "hardcoded to 30% (0.30) in rolling view",
+      "should_be": "slider with range 10-200%, default 30%",
+      "used_in": "build_enriched_cube() for DMA-level outlier detection"
+    },
+    "first_appearance_lookback": {
+      "currently": "implicit in rolling window logic",
+      "should_be": "slider with range 7-90 days, default 28",
+      "used_in": "distribution logic for rare pair detection"
+    }
+  },
+  "outlier_detection_methods": {
+    "national_level": {
+      "method": "DOW-partitioned tiered rolling z-score",
+      "tiers": ["28d (4+ samples weekday, 2+ weekend)", "14d (4+ samples weekday, 2+ weekend)", "4d (minimum)"],
+      "thresholds": ["z_score (default 2.5)", "egregious_impact (default 40 wins)"],
+      "filters": ["top_n (default 25)", "min_share_pct (default 0.5%)"]
+    },
+    "dma_level": {
+      "method": "DMA carrier pair rolling z-score + % change",
+      "thresholds": ["dma_z_score (default 1.5)", "dma_pct_change (default 30%)"],
+      "minimum_wins": "auto_min_wins (default 2) for outlier suppression"
+    },
+    "first_appearance": {
+      "method": "Check if carrier appeared in DMA within lookback window",
+      "lookback": "28 days (should be configurable)",
+      "level": "DMA-level (not census block)"
+    },
+    "rare_pairs": {
+      "method": "Pairs with z-score violation AND impact > 15",
+      "legacy_mode": "Available but not recommended"
+    }
+  }
+}

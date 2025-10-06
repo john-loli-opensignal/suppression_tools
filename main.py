@@ -33,12 +33,21 @@ def ui():
     view_end = st.sidebar.date_input('End Date', value=date(2025,8,31))
 
     st.sidebar.header('Outlier Detection Thresholds')
+    st.sidebar.caption('**National Level**')
     top_n = st.sidebar.slider('Top N Carriers', min_value=10, max_value=100, value=25, step=5,
                                help='Focus on top N carriers by total wins')
-    z_threshold = st.sidebar.slider('Z-Score Threshold', min_value=0.5, max_value=5.0, value=2.5, step=0.1,
-                                     help='Statistical outlier threshold (default: 2.5)')
+    z_threshold = st.sidebar.slider('National Z-Score Threshold', min_value=0.5, max_value=5.0, value=2.5, step=0.1,
+                                     help='Statistical outlier threshold for national-level detection (default: 2.5)')
     egregious_threshold = st.sidebar.slider('Egregious Impact', min_value=10, max_value=100, value=40, step=5,
                                             help='Flag outliers outside top N with impact > this')
+    
+    st.sidebar.caption('**DMA (Pair) Level**')
+    dma_z_threshold = st.sidebar.slider('DMA Z-Score Threshold', min_value=0.5, max_value=5.0, value=1.5, step=0.1,
+                                        help='Statistical outlier threshold for DMA pair-level detection (default: 1.5)')
+    dma_pct_threshold = st.sidebar.slider('DMA % Change Threshold', min_value=10.0, max_value=100.0, value=30.0, step=5.0,
+                                          help='Percent change threshold for DMA-level outliers (default: 30%)')
+    rare_pair_impact = st.sidebar.slider('Rare Pair Impact', min_value=5, max_value=50, value=15, step=5,
+                                        help='Minimum impact for rare pairs to be flagged (default: 15)')
     
     st.sidebar.header('Suppression Thresholds')
     auto_min_wins = st.sidebar.slider('Min Wins for Auto Suppression', min_value=1, max_value=20, value=2, step=1,
@@ -398,6 +407,9 @@ def ui():
                         mover_ind=mover_ind,
                         start_date=str(view_start),
                         end_date=str(view_end),
+                        dma_z_threshold=dma_z_threshold,
+                        dma_pct_threshold=dma_pct_threshold,
+                        rare_pair_impact_threshold=rare_pair_impact,
                         db_path=db_path
                     )
                     
