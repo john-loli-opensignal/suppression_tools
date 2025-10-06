@@ -335,7 +335,7 @@ def ui():
                         legend=dict(orientation='v', x=1.02, y=0.5),
                         margin=dict(l=40, r=200, t=80, b=40)
                     )
-                    st.plotly_chart(fig, width='content')
+                    st.plotly_chart(fig, use_container_width=False)
                 except Exception as e:
                     st.error(f'Failed to create graph: {e}')
                     import traceback
@@ -929,7 +929,7 @@ def ui():
                             margin=dict(l=40, r=250, t=100, b=40)
                         )
                         
-                        st.plotly_chart(fig, width='content')
+                        st.plotly_chart(fig, use_container_width=False)
                         
                         # Show summary stats
                         total_base = base_series.groupby('winner')['total_wins'].sum()

@@ -1,4 +1,13 @@
 {
+  "streamlit_api_changes": {
+    "use_container_width_deprecation": {
+      "date": "2025-10-05",
+      "change": "Streamlit 1.50.0 deprecated use_container_width parameter",
+      "fix": "Replace use_container_width=True with width='stretch', use_container_width=False with width='content'",
+      "affected_methods": ["st.plotly_chart()", "st.dataframe()"],
+      "commit": "33263dc"
+    }
+  },
   "critical_fixes": {
     "windstream_suppression_bug": {
       "date": "2025-10-05",
