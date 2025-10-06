@@ -1,0 +1,38 @@
+{
+  "critical_fixes_2025_10_05": {
+    "distributed_suppression_pair_level_check": {
+      "issue": "Distributed stage was checking if DMA totals >= threshold, not individual pairs",
+      "wrong_code": "eligible_dmas = dma_level[dma_level['dma_wins'] >= distributed_min_wins]",
+      "correct_code": "eligible_pairs = sub[sub['pair_wins_current'] >= distributed_min_wins]",
+      "impact": "Carriers like Windstream with many small pairs were excluded",
+      "example": "Windstream 2025-07-26: 187 national wins but only 2 pairs with 5+ wins, rest had 1-3",
+      "fix": "Filter at pair level, not DMA aggregate level",
+      "commit": "e534db0",
+      "location": "main.py lines 493-527"
+    },
+    "preview_shows_all_top_n": {
+      "issue": "Preview graph only showed carriers in plan, missing others like Spectrum",
+      "wrong_code": "winners = sorted(plan_df['winner'].unique().tolist())",
+      "correct_code": "all_top_carriers = get_top_n_carriers(ds, mover_ind, n=top_n, min_share_pct=min_share_pct)",
+      "impact": "Users couldn't see full context of suppression impact",
+      "fix": "Query all top N carriers before applying suppressions",
+      "commit": "e534db0",
+      "location": "main.py lines 742-759"
+    },
+    "national_outliers_table_dates": {
+      "issue": "Summary table didn't show dates, hard to validate which dates had outliers",
+      "added": "Detailed table with Date, Carrier, Impact, Total Wins, Z-Score columns",
+      "commit": "e534db0",
+      "location": "main.py lines 352-377"
+    }
+  },
+  "distribution_thresholds_clarified": {
+    "auto_stage_min_wins": 5,
+    "distributed_stage_min_wins": "slider parameter (default: 2)",
+    "purpose": {
+      "auto": "High-confidence outliers only (z-score violations need volume)",
+      "distributed": "Fair allocation across all eligible pairs (can be lower)"
+    },
+    "user_control": "Distributed threshold on slider for flexibility"
+  }
+}
