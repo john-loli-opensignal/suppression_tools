@@ -135,6 +135,68 @@ def ui():
                 col2.metric('Carriers Flagged', unique_winners)
                 col3.metric('Total Impact (wins)', f'{total_impact:,}')
                 
+                # Display outliers graph
+                st.subheader('National Win Share with Outliers Flagged')
+                try:
+                    # Get full time series for flagged carriers
+                    flagged_carriers = outliers_df['winner'].unique().tolist()
+                    ts = base_national_series(
+                        ds=ds,
+                        mover_ind=mover_ind,
+                        winners=flagged_carriers,
+                        start_date=str(view_start),
+                        end_date=str(view_end),
+                        db_path=db_path
+                    )
+                    
+                    if not ts.empty:
+                        # Create figure
+                        fig = go.Figure()
+                        
+                        # Add base lines for each carrier
+                        for w in sorted(flagged_carriers):
+                            sub = ts[ts['winner'] == w]
+                            fig.add_trace(go.Scatter(
+                                x=sub['the_date'],
+                                y=sub['win_share'] * 100,
+                                mode='lines',
+                                name=w,
+                                line=dict(width=2)
+                            ))
+                        
+                        # Add outlier markers
+                        outlier_markers = outliers_df.copy()
+                        outlier_markers['the_date'] = pd.to_datetime(outlier_markers['the_date'])
+                        outlier_markers['win_share_pct'] = outlier_markers['nat_share_current'] * 100
+                        
+                        for w in sorted(flagged_carriers):
+                            outlier_sub = outlier_markers[outlier_markers['winner'] == w]
+                            if not outlier_sub.empty:
+                                fig.add_trace(go.Scatter(
+                                    x=outlier_sub['the_date'],
+                                    y=outlier_sub['win_share_pct'],
+                                    mode='markers',
+                                    name=f'{w} (outlier)',
+                                    marker=dict(size=10, symbol='x', line=dict(width=2)),
+                                    showlegend=False,
+                                    hovertemplate=f'{w}<br>Date: %{{x}}<br>Share: %{{y:.2f}}%<br>Z-score: %{{customdata:.2f}}<extra></extra>',
+                                    customdata=outlier_sub['nat_z_score']
+                                ))
+                        
+                        fig.update_layout(
+                            title=f'National Outliers - {ds} {"Mover" if mover_ind else "Non-Mover"}',
+                            width=1200,
+                            height=600,
+                            xaxis_title='Date',
+                            yaxis_title='Win Share (%)',
+                            hovermode='x unified',
+                            legend=dict(orientation='v', yanchor='top', y=1, xanchor='left', x=1.02)
+                        )
+                        
+                        st.plotly_chart(fig, width='stretch')
+                except Exception as e:
+                    st.warning(f'Could not generate outlier graph: {e}')
+                
                 # Display outliers table
                 display_df = outliers_df[['the_date', 'winner', 'nat_z_score', 'impact', 'nat_total_wins', 'nat_mu_wins']].copy()
                 display_df['nat_z_score'] = display_df['nat_z_score'].round(2)

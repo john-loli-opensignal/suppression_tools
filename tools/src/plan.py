@@ -338,6 +338,7 @@ def build_enriched_cube(
     
     sql = f"""
         WITH pair_level AS (
+            -- Get pair-level data with rolling metrics from the entire time series
             SELECT 
                 the_date,
                 day_of_week,
@@ -364,18 +365,25 @@ def build_enriched_cube(
                     ELSE false 
                 END as rare_pair,
                 n_periods as pair_mu_window,
-                selected_window
+                selected_window,
+                -- Pair-level impact (for DMA-level suppression)
+                CASE 
+                    WHEN avg_wins IS NOT NULL AND NOT isnan(avg_wins) THEN 
+                        CAST(ROUND(total_wins - avg_wins) AS INTEGER)
+                    ELSE CAST(total_wins AS INTEGER)  -- First appearances: all wins are "excess"
+                END as pair_impact
             FROM {rolling_view}
-            WHERE the_date BETWEEN '{start_date}' AND '{end_date}'
-                AND total_wins >= 5  -- Minimum volume filter
+            WHERE total_wins >= 5  -- Minimum volume filter
                 AND selected_window IS NOT NULL  -- Only include dates with valid rolling metrics
         ),
+        -- National aggregation for context (aggregate across all DMAs)
         national_daily AS (
             SELECT
                 the_date,
                 day_of_week,
                 winner,
-                SUM(pair_wins_current) as nat_total_wins
+                SUM(pair_wins_current) as nat_total_wins,
+                SUM(pair_impact) as nat_total_impact
             FROM pair_level
             GROUP BY the_date, day_of_week, winner
         ),
@@ -392,54 +400,61 @@ def build_enriched_cube(
                 n.day_of_week,
                 n.winner,
                 n.nat_total_wins,
+                n.nat_total_impact,
                 m.nat_market_wins,
                 n.nat_total_wins * 1.0 / NULLIF(m.nat_market_wins, 0) as nat_share_current
             FROM national_daily n
             JOIN market_daily m ON n.the_date = m.the_date
         ),
+        -- National rolling metrics using DOW-partitioned windows across entire series
         national_rolling AS (
             SELECT 
                 the_date,
                 winner,
                 nat_total_wins,
+                nat_total_impact,
                 nat_market_wins,
                 nat_share_current,
-                -- DOW-partitioned rolling metrics using ROWS window
+                -- DOW-partitioned rolling metrics (14-day lookback = ~2 periods)
                 AVG(nat_total_wins) OVER w as nat_mu_wins,
                 STDDEV(nat_total_wins) OVER w as nat_sigma_wins,
                 AVG(nat_share_current) OVER w as nat_mu_share,
-                STDDEV(nat_share_current) OVER w as nat_sigma_share
+                STDDEV(nat_share_current) OVER w as nat_sigma_share,
+                COUNT(*) OVER w as nat_n_periods
             FROM national_with_share
             WINDOW w AS (
                 PARTITION BY winner, day_of_week
                 ORDER BY the_date
-                ROWS BETWEEN 13 PRECEDING AND 1 PRECEDING
+                ROWS BETWEEN 27 PRECEDING AND 1 PRECEDING  -- 28-day window
             )
+        ),
+        -- Join pair-level with national-level context
+        enriched AS (
+            SELECT 
+                p.*,
+                n.nat_total_wins,
+                n.nat_market_wins,
+                n.nat_share_current,
+                n.nat_mu_wins,
+                n.nat_sigma_wins,
+                n.nat_mu_share,
+                n.nat_sigma_share,
+                -- National z-score
+                CASE 
+                    WHEN n.nat_sigma_wins > 0 AND n.nat_mu_wins IS NOT NULL AND NOT isnan(n.nat_mu_wins) THEN 
+                        (n.nat_total_wins - n.nat_mu_wins) / n.nat_sigma_wins
+                    ELSE 0 
+                END as nat_z_score,
+                -- National impact (sum of all pair impacts)
+                n.nat_total_impact as impact
+            FROM pair_level p
+            JOIN national_rolling n ON p.the_date = n.the_date AND p.winner = n.winner
         )
-        SELECT 
-            p.*,
-            n.nat_total_wins,
-            n.nat_market_wins,
-            n.nat_share_current,
-            n.nat_mu_wins,
-            n.nat_sigma_wins,
-            n.nat_mu_share,
-            n.nat_sigma_share,
-            -- National z-score
-            CASE 
-                WHEN n.nat_sigma_wins > 0 AND n.nat_mu_wins IS NOT NULL AND NOT isnan(n.nat_mu_wins) THEN 
-                    (n.nat_total_wins - n.nat_mu_wins) / n.nat_sigma_wins
-                ELSE 0 
-            END as nat_z_score,
-            -- Impact (excess over baseline)
-            CASE 
-                WHEN n.nat_mu_wins IS NOT NULL AND NOT isnan(n.nat_mu_wins) AND n.nat_mu_wins > 0 THEN 
-                    CAST(ROUND(n.nat_total_wins - n.nat_mu_wins) AS INTEGER)
-                ELSE 0
-            END as impact
-        FROM pair_level p
-        JOIN national_rolling n ON p.the_date = n.the_date AND p.winner = n.winner
-        ORDER BY p.the_date, p.winner, p.dma_name, p.loser
+        -- Filter to graph window at the end
+        SELECT *
+        FROM enriched
+        WHERE the_date BETWEEN '{start_date}' AND '{end_date}'
+        ORDER BY the_date, winner, dma_name, loser
     """
     return db.query(sql, db_path)
 
