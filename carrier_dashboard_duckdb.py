@@ -761,7 +761,7 @@ def main():
                 float(st.session_state.outlier_z),
                 str(st.session_state.graph_start),
                 str(st.session_state.graph_end),
-                st.session_state.display_mode,
+                display_mode=st.session_state.display_mode,
             )
         else:
             if st.session_state.selection_mode == "Top N Carriers":
@@ -779,7 +779,7 @@ def main():
                 z_thresh=float(st.session_state.outlier_z),
                 start_date=str(st.session_state.graph_start),
                 end_date=str(st.session_state.graph_end),
-                st.session_state.display_mode,
+                display_mode=st.session_state.display_mode,
             )
         st.session_state.last_pdf = pdf
         # capture applied signature
