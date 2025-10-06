@@ -2,363 +2,627 @@
 import os
 from datetime import date
 import pandas as pd
+import numpy as np
 import streamlit as st
 import plotly.graph_objs as go
-from tools.src.plan import scan_base_outliers, build_plan_for_winner_dates, base_national_series
-from tools.src.util import expand
-
-
-def default_store() -> str:
-    return os.path.join(os.getcwd(), 'duckdb_partitioned_store', '**', '*.parquet')
+import tools.db as db
+from tools.src.plan import (
+    get_top_n_carriers,
+    base_national_series,
+    scan_base_outliers,
+    build_enriched_cube
+)
 
 
 def ui():
     st.set_page_config(page_title='Suppression Tools', page_icon='🧰', layout='wide')
     st.title('🧰 Suppression Tools (Base → Outliers → Plan)')
 
-    st.sidebar.header('Data Source')
-    store_glob = st.sidebar.text_input('Parquet glob', value=default_store())
-    ds = st.sidebar.text_input('ds', value='gamoshi')
-    mover_ind = st.sidebar.selectbox('mover_ind', ['False','True'], index=0)
+    st.sidebar.header('Configuration')
+    ds = st.sidebar.text_input('Dataset (ds)', value='gamoshi')
+    mover_ind = st.sidebar.selectbox('Mover Type', options=[False, True], index=0, 
+                                     format_func=lambda x: 'Mover' if x else 'Non-Mover')
+    
+    # Database info (read-only display)
+    db_path = db.get_default_db_path()
+    st.sidebar.info(f"📊 Database: `{os.path.basename(db_path)}`")
 
-    st.sidebar.header('Cubes')
-    cube_mover = st.sidebar.text_input('Mover cube CSV', value=os.path.join(os.getcwd(), 'current_run_duckdb', 'win_cube_mover.csv'))
-    cube_non_mover = st.sidebar.text_input('Non-mover cube CSV', value=os.path.join(os.getcwd(), 'current_run_duckdb', 'win_cube_non_mover.csv'))
-    colc1, colc2 = st.sidebar.columns(2)
-    with colc1:
-        if st.button('Build mover cube (True)'):
-            import subprocess, sys
-            script = os.path.join(os.getcwd(), 'build_win_cube.py')
-            cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind','True','-o', cube_mover]
-            res=subprocess.run(cmd, capture_output=True, text=True)
-            st.code((res.stdout or '') + (res.stderr or ''))
-    with colc2:
-        if st.button('Build non-mover cube (False)'):
-            import subprocess, sys
-            script = os.path.join(os.getcwd(), 'build_win_cube.py')
-            cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind','False','-o', cube_non_mover]
-            res=subprocess.run(cmd, capture_output=True, text=True)
-            st.code((res.stdout or '') + (res.stderr or ''))
+    st.sidebar.header('Graph Window')
+    view_start = st.sidebar.date_input('Start Date', value=date(2025,6,1))
+    view_end = st.sidebar.date_input('End Date', value=date(2025,8,31))
 
-    st.sidebar.header('Graph Window (view)')
-    view_start = st.sidebar.date_input('Start', value=date(2025,6,1))
-    view_end = st.sidebar.date_input('End', value=date(2025,8,31))
+    st.sidebar.header('Outlier Detection Thresholds')
+    top_n = st.sidebar.slider('Top N Carriers', min_value=10, max_value=100, value=50, step=10,
+                               help='Focus on top N carriers by total wins')
+    z_threshold = st.sidebar.slider('Z-Score Threshold', min_value=0.5, max_value=5.0, value=2.5, step=0.1,
+                                     help='Statistical outlier threshold (default: 2.5)')
+    egregious_threshold = st.sidebar.slider('Egregious Impact', min_value=10, max_value=100, value=40, step=5,
+                                            help='Flag outliers outside top N with impact > this')
 
-    st.sidebar.header('Outlier Detection')
-    window = st.sidebar.number_input('DOW rows (window)', min_value=5, max_value=90, value=14)
-    z = st.sidebar.number_input('z threshold', min_value=0.5, max_value=5.0, value=2.5, step=0.1)
-
-    # Step 0: Preview base graph
-    st.subheader('0) Preview base graph (unsuppressed)')
-    default_winners = "Spectrum, Comcast, T-Mobile FWA, AT&T, Verizon FWA, Frontier, Verizon, Cox Communications, Altice, CenturyLink"
-    winners_text = st.text_input('Winners (comma-separated)', value=default_winners)
+    # Step 0: Preview base graph (unsuppressed)
+    st.subheader('0️⃣ Preview Base Graph (Unsuppressed)')
+    st.caption('View national win share for selected carriers using database cubes.')
+    
+    # Get top carriers automatically
+    try:
+        top_carriers = get_top_n_carriers(ds, mover_ind, n=top_n, db_path=db_path)
+        default_winners = ", ".join(top_carriers[:10])  # Show top 10 as default
+    except Exception as e:
+        st.error(f"Error loading top carriers: {e}")
+        default_winners = "Spectrum, Comcast, T-Mobile FWA, AT&T, Verizon FWA"
+    
+    winners_text = st.text_input('Winners (comma-separated, or leave for auto top 10)', value=default_winners)
     winners = [w.strip() for w in winners_text.split(',') if w.strip()]
-    if st.button('Show base graph'):
-        try:
-            ts = base_national_series(store_glob, ds, mover_ind, winners, str(view_start), str(view_end))
-            if ts.empty:
-                st.caption('No data for selected winners / window.')
-            else:
-                fig = go.Figure()
-                for w in sorted(ts['winner'].unique()):
-                    sub = ts[ts['winner']==w]
-                    fig.add_trace(go.Scatter(x=sub['the_date'], y=sub['win_share'], mode='lines', name=w, line=dict(width=2)))
-                fig.update_layout(width=1000, height=650, margin=dict(l=40,r=40,t=60,b=40), xaxis_title='Date', yaxis_title='Win Share')
-                st.plotly_chart(fig, use_container_width=False)
-        except Exception as e:
-            st.error(f'Base graph failed: {e}')
-
-    # Step 1: Base outliers
-    st.subheader('1) Scan base outliers (positive only)')
-    use_cube = st.checkbox('Use cube for outliers (faster)', value=True)
-    if st.button('Scan base outliers (view)'):
-        try:
-            if use_cube:
-                cube_path = cube_mover if mover_ind=='True' else cube_non_mover
-                # Auto-build cube if missing
-                if not os.path.exists(cube_path):
-                    import subprocess, sys
-                    script = os.path.join(os.getcwd(), 'build_win_cube.py')
-                    cmd=[sys.executable, script, '--store', store_glob, '--ds', ds, '--mover-ind', mover_ind, '-o', cube_path]
-                    res=subprocess.run(cmd, capture_output=True, text=True)
-                    if res.returncode != 0:
-                        st.error(f"Cube build failed: {res.stderr or res.stdout}")
-                        return
-                df = pd.read_csv(cube_path, parse_dates=['the_date'])
-                out = df[(df['the_date']>=pd.Timestamp(view_start)) & (df['the_date']<=pd.Timestamp(view_end)) & (df['nat_outlier_pos']==True)][['the_date','winner']].drop_duplicates().sort_values(['the_date','winner'])
-            else:
-                out = scan_base_outliers(store_glob, ds, mover_ind, str(view_start), str(view_end), int(window), float(z))
-            st.session_state['base_out'] = out
-        except Exception as e:
-            st.error(f'Scan failed: {e}')
-    base_out = st.session_state.get('base_out')
-    if isinstance(base_out, pd.DataFrame) and not base_out.empty:
-        st.dataframe(base_out)
-    else:
-        st.caption('No outliers scanned yet. Click the button above.')
-
-    # Step 2: Plan from these outliers
-    st.subheader('2) Build plan from current base outliers (no apply)')
-    if st.button('Build plan preview'):
-        out = st.session_state.get('base_out')
-        if out is None or out.empty:
-            st.error('No base outliers available. Run the scan first.')
+    
+    if st.button('Show Base Graph', key='show_base'):
+        if not winners:
+            st.error('Please enter at least one winner.')
         else:
             try:
-                import numpy as np
-                cube_path = cube_mover if mover_ind=='True' else cube_non_mover
-                cube = pd.read_csv(cube_path, parse_dates=['the_date'])
-                # filter to targets
-                targets = out.copy()
-                targets['the_date']=pd.to_datetime(targets['the_date'])
-                key = ['the_date','winner']
-                cube_f = cube.merge(targets, on=key, how='inner')
-                # Build plan per (date, winner)
-                rows = []
-                for (d,w), sub in cube_f.groupby(key):
-                    # target remove from national shares
-                    nat = sub.drop_duplicates(subset=['the_date','winner'])[['nat_total_wins','nat_market_wins','nat_mu_share']].iloc[0]
-                    W = float(nat['nat_total_wins']); T = float(nat['nat_market_wins']); mu = float(nat['nat_mu_share'])
-                    need = int(np.ceil(max((W - mu*T)/max(1e-12, (1-mu)), 0)))
-                    # DMA aggregates for shares
-                    dma_tot = sub.groupby('dma_name', as_index=False)['pair_wins_current'].sum().set_index('dma_name')['pair_wins_current'].to_dict()
-                    dma_mu_tot = sub.groupby('dma_name', as_index=False)['pair_mu_wins'].sum().set_index('dma_name')['pair_mu_wins'].to_dict()
-                    # Stage 1 auto from pair outliers
-                    # Triggers: z-based OR 30% jump OR rare/new pair
-                    auto = sub[(sub.get('pair_outlier_pos')==True) |
-                               (sub.get('pct_outlier_pos')==True) |
-                               (sub.get('rare_pair')==True) |
-                               (sub.get('new_pair')==True)].copy()
-                    # Enforce day-of minimum volume for Stage 1
-                    auto = auto[auto['pair_wins_current'] > 5]
-                    if not auto.empty:
-                        # Robust rm calculation: remove all if baseline is tiny/NaN; else remove excess
-                        pw = pd.to_numeric(auto['pair_wins_current'], errors='coerce').fillna(0.0)
-                        mu_eff = pd.to_numeric(auto['pair_mu_wins'], errors='coerce').fillna(0.0)
-                        remove_all = mu_eff < 5.0
-                        rm_excess = np.ceil(np.maximum(0.0, pw - mu_eff))
-                        auto['rm_pair'] = np.where(remove_all, np.ceil(pw), rm_excess).astype(int)
-                        auto = auto.sort_values(['pair_z','pair_wins_current'], ascending=[False, False])
-                        auto['cum'] = auto['rm_pair'].cumsum()
-                        auto['rm1'] = np.where(auto['cum']<=need, auto['rm_pair'], np.maximum(0, need - auto['cum'].shift(fill_value=0))).astype(int)
-                        auto = auto[auto['rm1']>0]
-                        need_after = int(max(0, need - int(auto['rm1'].sum())))
-                    else:
-                        need_after = need
-                    # Stage 2 equalized
-                    caps = sub[['loser','dma_name','pair_wins_current']].copy()
-                    if not caps.empty and need_after>0:
-                        caps['pair_wins_current'] = pd.to_numeric(caps['pair_wins_current'], errors='coerce').fillna(0.0)
-                        m = len(caps)
-                        base = need_after//m
-                        caps['rm_base'] = np.minimum(caps['pair_wins_current'], base).astype(int)
-                        remaining = int(max(0, need_after - int(caps['rm_base'].sum())))
-                        caps['residual'] = (caps['pair_wins_current'] - caps['rm_base']).astype(int)
-                        caps = caps.sort_values(['residual','pair_wins_current'], ascending=[False, False]).reset_index(drop=True)
-                        caps['extra'] = 0
-                        if remaining>0:
-                            idx = caps.index[caps['residual']>0][:remaining]
-                            caps.loc[idx, 'extra'] = 1
-                        caps['rm2'] = (caps['rm_base'] + caps['extra']).astype(int)
-                        caps = caps[caps['rm2']>0]
-                    else:
-                        caps = caps.iloc[0:0].copy()
-                    # Collect rows
-                    if not auto.empty:
-                        for _, r in auto.iterrows():
-                            _dmaw = float(dma_tot.get(r['dma_name'])) if r['dma_name'] in dma_tot else None
-                            _dmamu = float(dma_mu_tot.get(r['dma_name'])) if r['dma_name'] in dma_mu_tot else None
-                            _pair_share = (float(r['pair_wins_current'])/_dmaw) if (_dmaw and _dmaw>0) else None
-                            _pair_share_mu = (float(r['pair_mu_wins'])/_dmamu) if (_dmamu and _dmamu>0) else None
-                            rows.append({'date': d.date(), 'winner': w, 'mover_ind': (mover_ind=='True'), 'loser': r['loser'], 'dma_name': r['dma_name'], 'remove_units': int(r['rm1']), 'impact': int(r['rm1']), 'stage':'auto',
-                                         'nat_share_current': sub['nat_share_current'].iloc[0], 'nat_mu_share': sub['nat_mu_share'].iloc[0], 'nat_sigma_share': sub['nat_sigma_share'].iloc[0], 'nat_mu_window': sub['nat_mu_window'].iloc[0],
-                                         'pair_wins_current': r['pair_wins_current'], 'pair_mu_wins': r['pair_mu_wins'], 'pair_sigma_wins': r['pair_sigma_wins'], 'pair_mu_window': r['pair_mu_window'], 'pair_z': r['pair_z'],
-                                         'dma_wins': _dmaw, 'pair_share': _pair_share, 'pair_share_mu': _pair_share_mu})
-                    if not caps.empty:
-                        for _, r in caps.iterrows():
-                            # find QA from sub for this loser/dma
-                            qa = sub[(sub['loser']==r['loser']) & (sub['dma_name']==r['dma_name'])].head(1)
-                            _dmaw = float(dma_tot.get(r['dma_name'])) if r['dma_name'] in dma_tot else None
-                            _dmamu = float(dma_mu_tot.get(r['dma_name'])) if r['dma_name'] in dma_mu_tot else None
-                            _pwc = float(qa['pair_wins_current'].iloc[0]) if not qa.empty else None
-                            _pmu = float(qa['pair_mu_wins'].iloc[0]) if not qa.empty else None
-                            _pair_share = (_pwc/_dmaw) if (_dmaw and _dmaw>0 and _pwc is not None) else None
-                            _pair_share_mu = (_pmu/_dmamu) if (_dmamu and _dmamu>0 and _pmu is not None) else None
-                            rows.append({'date': d.date(), 'winner': w, 'mover_ind': (mover_ind=='True'), 'loser': r['loser'], 'dma_name': r['dma_name'], 'remove_units': int(r['rm2']), 'impact': int(r['rm2']), 'stage':'distributed',
-                                         'nat_share_current': sub['nat_share_current'].iloc[0], 'nat_mu_share': sub['nat_mu_share'].iloc[0], 'nat_sigma_share': sub['nat_sigma_share'].iloc[0], 'nat_mu_window': sub['nat_mu_window'].iloc[0],
-                                         'pair_wins_current': _pwc, 'pair_mu_wins': _pmu, 'pair_sigma_wins': qa['pair_sigma_wins'].iloc[0] if not qa.empty else None, 'pair_mu_window': qa['pair_mu_window'].iloc[0] if not qa.empty else None, 'pair_z': qa['pair_z'].iloc[0] if not qa.empty else None,
-                                         'dma_wins': _dmaw, 'pair_share': _pair_share, 'pair_share_mu': _pair_share_mu})
-                if rows:
-                    plan_prev = pd.DataFrame(rows)
-                    st.session_state['plan_prev'] = plan_prev
-                    # Build a display frame with requested columns, names, and formatting
-                    disp = plan_prev.copy()
-                    # Rename columns to abbreviated display names
-                    rename_map = {
-                        'pair_wins_current': 'pair_wins',
-                        'pair_mu_wins': 'pair_mu',
-                        'nat_share_current': 'nat_share',
-                        'nat_mu_share': 'nat_share_mu',
-                        'nat_zscore': 'nat_z',
-                    }
-                    disp = disp.rename(columns=rename_map)
-                    # Percent shares and rounding to 2 decimals
-                    for c in ['nat_share', 'nat_share_mu', 'pair_share', 'pair_share_mu']:
-                        if c in disp.columns:
-                            disp[c] = (pd.to_numeric(disp[c], errors='coerce') * 100).round(2)
-                    for c in ['pair_wins', 'pair_mu', 'dma_wins', 'impact', 'pair_z', 'nat_z']:
-                        if c in disp.columns:
-                            disp[c] = pd.to_numeric(disp[c], errors='coerce').round(2)
-                    # Reorder columns per request
-                    want = ['date', 'stage', 'mover_ind', 'dma_name', 'winner', 'loser',
-                            'pair_wins', 'pair_mu', 'dma_wins', 'pair_share', 'pair_share_mu',
-                            'impact', 'pair_z', 'nat_share', 'nat_share_mu', 'nat_z']
-                    cols = [c for c in want if c in disp.columns]
-                    disp = disp[cols]
-                    st.dataframe(disp)
-                    st.caption('Preview from cube. Save a copy to apply. Note: remove_units kept for apply, impact shown for QA.')
+                with st.spinner('Loading national time series from database...'):
+                    ts = base_national_series(
+                        ds=ds,
+                        mover_ind=mover_ind,
+                        winners=winners,
+                        start_date=str(view_start),
+                        end_date=str(view_end),
+                        db_path=db_path
+                    )
+                
+                if ts.empty:
+                    st.warning('No data found for selected winners in this date range.')
                 else:
-                    st.warning('No plan rows were generated from the current outliers.')
+                    fig = go.Figure()
+                    for w in sorted(ts['winner'].unique()):
+                        sub = ts[ts['winner'] == w]
+                        fig.add_trace(go.Scatter(
+                            x=sub['the_date'],
+                            y=sub['win_share'] * 100,  # Convert to percentage
+                            mode='lines',
+                            name=w,
+                            line=dict(width=2)
+                        ))
+                    
+                    fig.update_layout(
+                        title=f'National Win Share - {ds} {"Mover" if mover_ind else "Non-Mover"}',
+                        width=1200,
+                        height=600,
+                        xaxis_title='Date',
+                        yaxis_title='Win Share (%)',
+                        hovermode='x unified',
+                        legend=dict(orientation='v', yanchor='top', y=1, xanchor='left', x=1.02)
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.success(f'✅ Loaded {len(ts):,} data points for {len(winners)} carriers')
             except Exception as e:
-                st.error(f'Plan preview failed: {e}')
+                st.error(f'Failed to load base graph: {e}')
+                import traceback
+                with st.expander('Show traceback'):
+                    st.code(traceback.format_exc())
 
-    plan_prev = st.session_state.get('plan_prev')
-    st.subheader('3) Save plan to suppressions folder (apply on reload)')
+    # Step 1: Scan base outliers
+    st.subheader('1️⃣ Scan National-Level Outliers')
+    st.caption('Detect carriers with abnormal win patterns using DOW-aware rolling statistics.')
+    
+    if st.button('Scan for Outliers', key='scan_outliers'):
+        try:
+            with st.spinner('Scanning for national outliers using rolling views...'):
+                outliers_df = scan_base_outliers(
+                    ds=ds,
+                    mover_ind=mover_ind,
+                    start_date=str(view_start),
+                    end_date=str(view_end),
+                    z_threshold=z_threshold,
+                    top_n=top_n,
+                    egregious_threshold=egregious_threshold,
+                    db_path=db_path
+                )
+            
+            if outliers_df.empty:
+                st.success('✅ No national-level outliers detected in this date range!')
+                st.session_state['base_outliers'] = None
+            else:
+                st.session_state['base_outliers'] = outliers_df
+                st.success(f'✅ Found {len(outliers_df)} outlier instances')
+                
+                # Display summary
+                unique_dates = outliers_df['the_date'].nunique()
+                unique_winners = outliers_df['winner'].nunique()
+                total_impact = outliers_df['impact'].sum()
+                
+                col1, col2, col3 = st.columns(3)
+                col1.metric('Dates with Outliers', unique_dates)
+                col2.metric('Carriers Flagged', unique_winners)
+                col3.metric('Total Impact (wins)', f'{total_impact:,}')
+                
+                # Display outliers table
+                display_df = outliers_df[['the_date', 'winner', 'nat_z_score', 'impact', 'nat_total_wins', 'nat_mu_wins']].copy()
+                display_df['nat_z_score'] = display_df['nat_z_score'].round(2)
+                display_df = display_df.sort_values(['the_date', 'nat_z_score'], ascending=[True, False])
+                st.dataframe(display_df, use_container_width=True)
+                
+        except Exception as e:
+            st.error(f'Outlier scan failed: {e}')
+            import traceback
+            with st.expander('Show traceback'):
+                st.code(traceback.format_exc())
+    
+    # Show cached outliers if available
+    base_outliers = st.session_state.get('base_outliers')
+    if base_outliers is not None and not base_outliers.empty:
+        st.info(f'📌 {len(base_outliers)} outliers loaded from previous scan')
+    else:
+        st.caption('No outliers scanned yet. Click "Scan for Outliers" to begin.')
+
+    # Step 2: Build suppression plan
+    st.subheader('2️⃣ Build Suppression Plan')
+    st.caption('Generate auto + distributed suppression plan from detected outliers.')
+    
+    if st.button('Build Plan', key='build_plan'):
+        base_outliers = st.session_state.get('base_outliers')
+        if base_outliers is None or base_outliers.empty:
+            st.error('❌ No outliers available. Please run "Scan for Outliers" first.')
+        else:
+            try:
+                with st.spinner('Building enriched cube and generating suppression plan...'):
+                    # Get enriched cube for entire scan window
+                    enriched = build_enriched_cube(
+                        ds=ds,
+                        mover_ind=mover_ind,
+                        start_date=str(view_start),
+                        end_date=str(view_end),
+                        db_path=db_path
+                    )
+                    
+                    if enriched.empty:
+                        st.warning('No data found in enriched cube.')
+                    else:
+                        # Filter to only outlier dates/winners
+                        outlier_keys = base_outliers[['the_date', 'winner']].drop_duplicates()
+                        outlier_keys['the_date'] = pd.to_datetime(outlier_keys['the_date'])
+                        enriched['the_date'] = pd.to_datetime(enriched['the_date'])
+                        
+                        # Merge to get enriched data for outliers only
+                        enriched_outliers = enriched.merge(outlier_keys, on=['the_date', 'winner'], how='inner')
+                        
+                        if enriched_outliers.empty:
+                            st.warning('No enriched data matched the outliers.')
+                        else:
+                            # Build suppression plan using your distribution algorithm
+                            plan_rows = []
+                            
+                            for (the_date, winner), sub in enriched_outliers.groupby(['the_date', 'winner']):
+                                # Calculate removal need (excess over baseline)
+                                nat_info = sub.iloc[0]
+                                W = float(nat_info['nat_total_wins'])
+                                T = float(nat_info['nat_market_wins'])
+                                mu_share = float(nat_info['nat_mu_share'])
+                                
+                                # Calculate need: remove excess to bring share back to baseline
+                                need = int(np.ceil(max((W - mu_share * T) / max(1e-12, (1 - mu_share)), 0)))
+                                
+                                if need <= 0:
+                                    continue  # No removal needed
+                                
+                                # DMA-level aggregates for share calculations
+                                dma_totals = sub.groupby('dma_name')['pair_wins_current'].sum().to_dict()
+                                dma_mu_totals = sub.groupby('dma_name')['pair_mu_wins'].sum().to_dict()
+                                
+                                # ===  STAGE 1: AUTO SUPPRESSION ===
+                                # Trigger conditions per requirements:
+                                # - pair_outlier_pos (z-score violation)
+                                # - pct_outlier_pos (30% spike)
+                                # - rare_pair (appearance_rank <= 5) WITH z-score violation AND impact > 15
+                                # - new_pair (first appearance at DMA level)
+                                
+                                # Rare pairs need both z-score AND impact > 15
+                                is_rare_eligible = (sub['rare_pair'] == True) & (sub['pair_z'] > 1.5) & (sub['impact'].abs() > 15)
+                                
+                                auto_candidates = sub[
+                                    (sub['pair_outlier_pos'] == True) |
+                                    (sub['pct_outlier_pos'] == True) |
+                                    (is_rare_eligible) |
+                                    (sub['new_pair'] == True)
+                                ].copy()
+                                
+                                # Apply minimum volume filter (5 wins per day)
+                                auto_candidates = auto_candidates[auto_candidates['pair_wins_current'] >= 5]
+                                
+                                if not auto_candidates.empty:
+                                    # Calculate removal amount: NO CAP, remove FULL excess
+                                    pw = pd.to_numeric(auto_candidates['pair_wins_current'], errors='coerce').fillna(0.0)
+                                    mu_eff = pd.to_numeric(auto_candidates['pair_mu_wins'], errors='coerce').fillna(0.0)
+                                    
+                                    # Remove full excess (current - baseline)
+                                    rm_excess = np.ceil(np.maximum(0.0, pw - mu_eff)).astype(int)
+                                    auto_candidates['rm_pair'] = rm_excess
+                                    
+                                    # Sort by severity (z-score, then current wins)
+                                    auto_candidates = auto_candidates.sort_values(
+                                        ['pair_z', 'pair_wins_current'],
+                                        ascending=[False, False]
+                                    )
+                                    
+                                    # Allocate removals up to need
+                                    auto_candidates['cum_remove'] = auto_candidates['rm_pair'].cumsum()
+                                    auto_candidates['rm_final'] = np.where(
+                                        auto_candidates['cum_remove'] <= need,
+                                        auto_candidates['rm_pair'],
+                                        np.maximum(0, need - auto_candidates['cum_remove'].shift(fill_value=0))
+                                    ).astype(int)
+                                    
+                                    auto_final = auto_candidates[auto_candidates['rm_final'] > 0]
+                                    auto_removed = int(auto_final['rm_final'].sum())
+                                else:
+                                    auto_final = pd.DataFrame()
+                                    auto_removed = 0
+                                
+                                # === STAGE 2: DISTRIBUTED SUPPRESSION ===
+                                need_remaining = max(0, need - auto_removed)
+                                
+                                if need_remaining > 0:
+                                    # Distribute evenly across all pairs (fair distribution)
+                                    all_pairs = sub[['loser', 'dma_name', 'pair_wins_current']].copy()
+                                    all_pairs['capacity'] = pd.to_numeric(all_pairs['pair_wins_current'], errors='coerce').fillna(0.0)
+                                    
+                                    m = len(all_pairs)
+                                    base_per_pair = need_remaining // m
+                                    all_pairs['rm_base'] = np.minimum(all_pairs['capacity'], base_per_pair).astype(int)
+                                    
+                                    # Distribute remainder
+                                    distributed_so_far = int(all_pairs['rm_base'].sum())
+                                    remainder = max(0, need_remaining - distributed_so_far)
+                                    
+                                    all_pairs['residual'] = (all_pairs['capacity'] - all_pairs['rm_base']).astype(int)
+                                    all_pairs = all_pairs.sort_values(
+                                        ['residual', 'capacity'],
+                                        ascending=[False, False]
+                                    ).reset_index(drop=True)
+                                    
+                                    all_pairs['extra'] = 0
+                                    if remainder > 0:
+                                        eligible_idx = all_pairs.index[all_pairs['residual'] > 0][:remainder]
+                                        all_pairs.loc[eligible_idx, 'extra'] = 1
+                                    
+                                    all_pairs['rm_final'] = (all_pairs['rm_base'] + all_pairs['extra']).astype(int)
+                                    distributed_final = all_pairs[all_pairs['rm_final'] > 0]
+                                else:
+                                    distributed_final = pd.DataFrame()
+                                
+                                # === COLLECT PLAN ROWS ===
+                                # Auto stage rows
+                                for _, r in auto_final.iterrows():
+                                    dma_total = dma_totals.get(r['dma_name'], 0)
+                                    dma_mu_total = dma_mu_totals.get(r['dma_name'], 0)
+                                    
+                                    pair_share = (r['pair_wins_current'] / dma_total) if dma_total > 0 else None
+                                    pair_share_mu = (r['pair_mu_wins'] / dma_mu_total) if dma_mu_total > 0 else None
+                                    
+                                    plan_rows.append({
+                                        'date': pd.to_datetime(the_date).date(),
+                                        'winner': winner,
+                                        'loser': r['loser'],
+                                        'dma_name': r['dma_name'],
+                                        'state': r['state'],
+                                        'mover_ind': mover_ind,
+                                        'remove_units': int(r['rm_final']),
+                                        'stage': 'auto',
+                                        'pair_wins_current': r['pair_wins_current'],
+                                        'pair_mu_wins': r['pair_mu_wins'],
+                                        'pair_sigma_wins': r['pair_sigma_wins'],
+                                        'pair_z': r['pair_z'],
+                                        'pair_pct_change': r['pair_pct_change'],
+                                        'dma_wins': dma_total,
+                                        'pair_share': pair_share,
+                                        'pair_share_mu': pair_share_mu,
+                                        'nat_total_wins': nat_info['nat_total_wins'],
+                                        'nat_share_current': nat_info['nat_share_current'],
+                                        'nat_mu_share': nat_info['nat_mu_share'],
+                                        'nat_z_score': nat_info['nat_z_score'],
+                                        'impact': int(r['rm_final'])
+                                    })
+                                
+                                # Distributed stage rows
+                                for _, r in distributed_final.iterrows():
+                                    # Find pair details from sub
+                                    pair_info = sub[(sub['loser'] == r['loser']) & (sub['dma_name'] == r['dma_name'])]
+                                    if not pair_info.empty:
+                                        p = pair_info.iloc[0]
+                                        dma_total = dma_totals.get(r['dma_name'], 0)
+                                        dma_mu_total = dma_mu_totals.get(r['dma_name'], 0)
+                                        
+                                        pair_share = (p['pair_wins_current'] / dma_total) if dma_total > 0 else None
+                                        pair_share_mu = (p['pair_mu_wins'] / dma_mu_total) if dma_mu_total > 0 else None
+                                        
+                                        plan_rows.append({
+                                            'date': pd.to_datetime(the_date).date(),
+                                            'winner': winner,
+                                            'loser': r['loser'],
+                                            'dma_name': r['dma_name'],
+                                            'state': p['state'],
+                                            'mover_ind': mover_ind,
+                                            'remove_units': int(r['rm_final']),
+                                            'stage': 'distributed',
+                                            'pair_wins_current': p['pair_wins_current'],
+                                            'pair_mu_wins': p['pair_mu_wins'],
+                                            'pair_sigma_wins': p['pair_sigma_wins'],
+                                            'pair_z': p['pair_z'],
+                                            'pair_pct_change': p['pair_pct_change'],
+                                            'dma_wins': dma_total,
+                                            'pair_share': pair_share,
+                                            'pair_share_mu': pair_share_mu,
+                                            'nat_total_wins': nat_info['nat_total_wins'],
+                                            'nat_share_current': nat_info['nat_share_current'],
+                                            'nat_mu_share': nat_info['nat_mu_share'],
+                                            'nat_z_score': nat_info['nat_z_score'],
+                                            'impact': int(r['rm_final'])
+                                        })
+                            
+                            if plan_rows:
+                                plan_df = pd.DataFrame(plan_rows)
+                                st.session_state['suppression_plan'] = plan_df
+                                
+                                # Display summary
+                                total_removals = plan_df['remove_units'].sum()
+                                auto_removals = plan_df[plan_df['stage'] == 'auto']['remove_units'].sum()
+                                dist_removals = plan_df[plan_df['stage'] == 'distributed']['remove_units'].sum()
+                                
+                                col1, col2, col3, col4 = st.columns(4)
+                                col1.metric('Total Removals', f'{total_removals:,}')
+                                col2.metric('Auto Stage', f'{auto_removals:,}')
+                                col3.metric('Distributed', f'{dist_removals:,}')
+                                col4.metric('Plan Rows', len(plan_df))
+                                
+                                # Display plan
+                                display_plan = plan_df.copy()
+                                
+                                # Format percentages and round numbers
+                                for c in ['nat_share_current', 'nat_mu_share', 'pair_share', 'pair_share_mu', 'pair_pct_change']:
+                                    if c in display_plan.columns:
+                                        display_plan[c] = (pd.to_numeric(display_plan[c], errors='coerce') * 100).round(2)
+                                
+                                for c in ['pair_z', 'nat_z_score']:
+                                    if c in display_plan.columns:
+                                        display_plan[c] = pd.to_numeric(display_plan[c], errors='coerce').round(2)
+                                
+                                # Select and reorder columns for display
+                                display_cols = ['date', 'stage', 'winner', 'loser', 'dma_name', 'state',
+                                              'remove_units', 'impact', 'pair_wins_current', 'pair_mu_wins',
+                                              'pair_z', 'dma_wins', 'pair_share', 'pair_share_mu',
+                                              'nat_share_current', 'nat_mu_share', 'nat_z_score']
+                                display_cols = [c for c in display_cols if c in display_plan.columns]
+                                display_plan = display_plan[display_cols]
+                                
+                                st.dataframe(display_plan, use_container_width=True)
+                                st.success('✅ Suppression plan generated successfully!')
+                            else:
+                                st.warning('⚠️  No suppression plan rows were generated from the outliers.')
+            except Exception as e:
+                st.error(f'❌ Plan building failed: {e}')
+                import traceback
+                with st.expander('Show traceback'):
+                    st.code(traceback.format_exc())
+    
+    # Show cached plan if available
+    plan_df = st.session_state.get('suppression_plan')
+    if plan_df is not None and not plan_df.empty:
+        st.info(f'📌 Suppression plan loaded: {len(plan_df)} rows, {plan_df["remove_units"].sum():,} total removals')
+    #  Step 3: Save suppression plan
+    st.subheader('3️⃣ Save Suppression Plan')
+    st.caption('Save plan to database and CSV file for use in dashboards.')
+    
     col1, col2 = st.columns(2)
     with col1:
-        round_name = st.text_input('Round name', value='base_outliers_round')
+        round_name = st.text_input('Round Name', value='base_outliers_round', 
+                                   help='Unique name for this suppression round')
     with col2:
-        if st.button('Save plan CSV'):
-            if plan_prev is None or plan_prev.empty:
-                st.error('No plan preview to save.')
-            else:
-                out_dir = os.path.join(os.getcwd(), 'suppressions')
-                os.makedirs(out_dir, exist_ok=True)
-                path = os.path.join(out_dir, f'{round_name}.csv')
-                plan_prev.to_csv(path, index=False)
-                st.success(f'Saved plan to: {path}')
-                st.info('Open your suppression dashboard and click Reload & Apply to use it.')
+        overwrite = st.checkbox('Overwrite if exists', value=False,
+                               help='Allow overwriting existing round')
+    
+    if st.button('Save Plan', key='save_plan'):
+        plan_df = st.session_state.get('suppression_plan')
+        if plan_df is None or plan_df.empty:
+            st.error('❌ No plan to save. Build a plan first.')
+        else:
+            try:
+                # Check if round already exists
+                csv_dir = os.path.join(os.getcwd(), 'suppressions', 'rounds')
+                os.makedirs(csv_dir, exist_ok=True)
+                csv_path = os.path.join(csv_dir, f'{round_name}.csv')
+                
+                if os.path.exists(csv_path) and not overwrite:
+                    st.error(f'❌ Round "{round_name}" already exists! Check "Overwrite if exists" to replace it.')
+                else:
+                    # Save to CSV
+                    plan_df.to_csv(csv_path, index=False)
+                    
+                    # TODO: Save to database (suppressions schema)
+                    # For now, CSV only
+                    
+                    st.success(f'✅ Saved plan to: `{csv_path}`')
+                    st.info(f'📊 {len(plan_df)} rows, {plan_df["remove_units"].sum():,} total removals')
+                    st.caption('Use the carrier_suppression_dashboard.py to apply and visualize this plan.')
+                    
+            except Exception as e:
+                st.error(f'❌ Save failed: {e}')
+                import traceback
+                with st.expander('Show traceback'):
+                    st.code(traceback.format_exc())
 
-    st.subheader('4) Build suppressed dataset (optional)')
-    if st.button('Run dataset builder'):
+    st.subheader('4️⃣ Build Suppressed Dataset (Optional)')
+    st.caption('Generate suppressed parquet files (advanced users only).')
+    if st.button('Run Dataset Builder'):
         try:
-            # Call the local builder script (kept under suppression_tools/tools)
             import subprocess, sys
             cmd = [sys.executable, os.path.join(os.getcwd(), 'tools', 'build_suppressed_dataset.py')]
             res = subprocess.run(cmd, capture_output=True, text=True)
-            st.code(res.stdout or res.stderr)
-        except Exception as e:
-            st.error(f'Builder failed: {e}')
-
-    # Step 5: Preview graph applying current plan in-memory (no files written)
-    st.subheader('5) Preview graph with current plan (no apply to files)')
-    st.caption('Applies the plan in-memory and shows base vs previewed-suppressed national share for winners in the plan within the view window.')
-    if st.button('Preview graph with plan'):
-        try:
-            import duckdb
-            plan_prev = st.session_state.get('plan_prev')
-            if plan_prev is None or plan_prev.empty:
-                st.error('No plan available. Build a plan preview first.')
+            if res.returncode == 0:
+                st.success('✅ Dataset builder completed')
+                st.code(res.stdout)
             else:
-                winners = sorted(plan_prev['winner'].unique().tolist())
-                if not winners:
-                    st.error('No winners found in the plan.')
-                else:
-                    # Build base and adjusted national series via DuckDB
-                    con = duckdb.connect()
-                    try:
-                        con.register('sup_df', plan_prev)
-                        winners_list = ",".join([f"'{str(w).replace("'","''")}'" for w in winners])
-                        ds_q = str(ds).replace("'","''")
-                        mi_q = 'TRUE' if mover_ind=='True' else 'FALSE'
-                        start_q = str(view_start); end_q = str(view_end)
-                        q = f"""
-                        WITH ds AS (SELECT * FROM parquet_scan('{store_glob}')),
-                        filt AS (
-                          SELECT the_date, winner, loser, dma_name, adjusted_wins, adjusted_losses
-                          FROM ds
-                          WHERE ds = '{ds_q}' AND mover_ind = {mi_q}
-                        ),
-                        sup AS (
-                          SELECT CAST(date AS DATE) AS d, winner, loser, dma_name, SUM(remove_units) AS remove_units
-                          FROM sup_df
-                          GROUP BY 1,2,3,4
-                        ),
-                        grp AS (
-                          SELECT CAST(the_date AS DATE) AS d, winner, loser, dma_name, SUM(adjusted_wins) AS group_wins
-                          FROM filt GROUP BY 1,2,3,4
-                        ),
-                        joined AS (
-                          SELECT f.*, COALESCE(s.remove_units, 0) AS remove_units, COALESCE(g.group_wins, 0) AS group_wins,
-                                 CAST(the_date AS DATE) AS d
-                          FROM filt f
-                          LEFT JOIN sup s ON CAST(f.the_date AS DATE)=s.d AND f.winner=s.winner AND f.loser=s.loser AND f.dma_name=s.dma_name
-                          LEFT JOIN grp g ON CAST(f.the_date AS DATE)=g.d AND f.winner=g.winner AND f.loser=g.loser AND f.dma_name=g.dma_name
-                        ),
-                        adj AS (
-                          SELECT the_date, winner, loser, dma_name,
-                                 GREATEST(0, adjusted_wins - (remove_units * (adjusted_wins / NULLIF(group_wins,0)))) AS adjusted_wins,
-                                 adjusted_losses
-                          FROM joined
-                        ),
-                        -- Base national series
-                        base_market AS (
-                          SELECT CAST(the_date AS DATE) AS d, SUM(adjusted_wins) AS T FROM filt GROUP BY 1
-                        ), base_w AS (
-                          SELECT CAST(the_date AS DATE) AS d, winner, SUM(adjusted_wins) AS W FROM filt GROUP BY 1,2
-                        ), base_series AS (
-                          SELECT b.d AS the_date, b.winner, b.W / NULLIF(m.T,0) AS win_share
-                          FROM base_w b JOIN base_market m USING (d)
-                          WHERE b.winner IN ({winners_list}) AND b.d BETWEEN DATE '{start_q}' AND DATE '{end_q}'
-                        ),
-                        -- Adjusted national series
-                        adj_market AS (
-                          SELECT CAST(the_date AS DATE) AS d, SUM(adjusted_wins) AS T FROM adj GROUP BY 1
-                        ), adj_w AS (
-                          SELECT CAST(the_date AS DATE) AS d, winner, SUM(adjusted_wins) AS W FROM adj GROUP BY 1,2
-                        )
-                        SELECT 'Base' AS label, the_date, winner, win_share FROM base_series
-                        UNION ALL
-                        SELECT 'Suppressed' AS label, a.d AS the_date, a.winner, a.W / NULLIF(m.T,0) AS win_share
-                        FROM adj_w a JOIN adj_market m USING (d)
-                        WHERE a.winner IN ({winners_list}) AND a.d BETWEEN DATE '{start_q}' AND DATE '{end_q}';
-                        """
-                        pdf = con.execute(q).df()
-                    finally:
-                        con.close()
-                    if pdf.empty:
-                        st.caption('No series to plot for the selected window/winners.')
-                    else:
-                        # Stack vertically: Base on top, Preview (Suppressed) below; both solid lines
-                        base_df = pdf[pdf['label']=='Base'].copy()
-                        supp_df = pdf[pdf['label']=='Suppressed'].copy()
-                        # Rank winners by total base win_share in view (desc) and cap legend to top N
-                        top_n_legend = 20
-                        agg = base_df.groupby('winner', as_index=False)['win_share'].sum().sort_values('win_share', ascending=False)
-                        winners_sorted = agg['winner'].tolist()
-                        legend_set = set(winners_sorted[:top_n_legend])
-                        y_max = float(pd.concat([base_df['win_share'], supp_df['win_share']], ignore_index=True).max()) if not pdf.empty else 1.0
-
-                        st.subheader('Base')
-                        fig_b = go.Figure()
-                        for w in winners_sorted:
-                            sub_b = base_df[base_df['winner']==w].sort_values('the_date')
-                            if not sub_b.empty:
-                                fig_b.add_trace(go.Scatter(x=sub_b['the_date'], y=sub_b['win_share'], mode='lines', name=w, line=dict(width=2), showlegend=(w in legend_set)))
-                        fig_b.update_layout(width=1400, height=400, margin=dict(l=40,r=40,t=40,b=40), xaxis_title='Date', yaxis_title='Win Share', yaxis=dict(range=[0, y_max*1.05]))
-                        st.plotly_chart(fig_b, use_container_width=False)
-
-                        st.subheader('Preview (Suppressed)')
-                        fig_s = go.Figure()
-                        for w in winners_sorted:
-                            sub_s = supp_df[supp_df['winner']==w].sort_values('the_date')
-                            if not sub_s.empty:
-                                fig_s.add_trace(go.Scatter(x=sub_s['the_date'], y=sub_s['win_share'], mode='lines', name=w, line=dict(width=2), showlegend=(w in legend_set)))
-                        fig_s.update_layout(width=1400, height=400, margin=dict(l=40,r=40,t=40,b=40), xaxis_title='Date', yaxis_title='Win Share', yaxis=dict(range=[0, y_max*1.05]))
-                        st.plotly_chart(fig_s, use_container_width=False)
+                st.error('❌ Dataset builder failed')
+                st.code(res.stderr or res.stdout)
         except Exception as e:
-            st.error(f'Preview graph failed: {e}')
+            st.error(f'❌ Builder failed: {e}')
+
+    # Step 5: Preview before/after with suppressions
+    st.subheader('5️⃣ Preview Before/After Comparison')
+    st.caption('Apply suppressions in-memory and visualize the effect on national win share.')
+    
+    if st.button('Generate Preview', key='preview_graph'):
+        plan_df = st.session_state.get('suppression_plan')
+        if plan_df is None or plan_df.empty:
+            st.error('❌ No plan available. Build a plan first.')
+        else:
+            try:
+                with st.spinner('Generating before/after comparison...'):
+                    winners = sorted(plan_df['winner'].unique().tolist())
+                    
+                    # Get base national series
+                    base_series = base_national_series(
+                        ds=ds,
+                        mover_ind=mover_ind,
+                        winners=winners,
+                        start_date=str(view_start),
+                        end_date=str(view_end),
+                        db_path=db_path
+                    )
+                    
+                    if base_series.empty:
+                        st.warning('No base data found for comparison.')
+                    else:
+                        # Apply suppressions to create suppressed series
+                        # Aggregate plan by date/winner/loser/dma
+                        suppressions = plan_df.groupby(['date', 'winner', 'loser', 'dma_name'])['remove_units'].sum().reset_index()
+                        suppressions['date'] = pd.to_datetime(suppressions['date'])
+                        
+                        # Get detailed pair-level data from cube
+                        cube_table = f"{ds}_win_{'mover' if mover_ind else 'non_mover'}_cube"
+                        
+                        import duckdb
+                        con = duckdb.connect(db_path)
+                        
+                        # Query cube data for winners in plan
+                        winners_str = ','.join([f"'{w}'" for w in winners])
+                        pair_data = con.execute(f"""
+                            SELECT 
+                                the_date,
+                                winner,
+                                loser,
+                                dma_name,
+                                total_wins
+                            FROM {cube_table}
+                            WHERE the_date BETWEEN '{view_start}' AND '{view_end}'
+                                AND winner IN ({winners_str})
+                        """).df()
+                        con.close()
+                        
+                        # Merge suppressions
+                        pair_data['the_date'] = pd.to_datetime(pair_data['the_date'])
+                        suppressions = suppressions.rename(columns={'date': 'the_date'})
+                        
+                        pair_suppressed = pair_data.merge(
+                            suppressions,
+                            on=['the_date', 'winner', 'loser', 'dma_name'],
+                            how='left'
+                        )
+                        pair_suppressed['remove_units'] = pair_suppressed['remove_units'].fillna(0)
+                        
+                        # Apply suppressions
+                        pair_suppressed['suppressed_wins'] = np.maximum(
+                            0,
+                            pair_suppressed['total_wins'] - pair_suppressed['remove_units']
+                        )
+                        
+                        # Calculate suppressed national series
+                        suppressed_agg = pair_suppressed.groupby(['the_date', 'winner']).agg({
+                            'suppressed_wins': 'sum'
+                        }).reset_index()
+                        
+                        suppressed_market = suppressed_agg.groupby('the_date')['suppressed_wins'].sum().reset_index()
+                        suppressed_market = suppressed_market.rename(columns={'suppressed_wins': 'market_total'})
+                        
+                        suppressed_series = suppressed_agg.merge(suppressed_market, on='the_date')
+                        suppressed_series['win_share'] = suppressed_series['suppressed_wins'] / suppressed_series['market_total']
+                        suppressed_series = suppressed_series.rename(columns={'suppressed_wins': 'total_wins'})
+                        
+                        # Create overlay chart (solid base, dashed suppressed)
+                        fig = go.Figure()
+                        
+                        # Sort winners by total base win share
+                        winner_totals = base_series.groupby('winner')['win_share'].sum().sort_values(ascending=False)
+                        winners_sorted = winner_totals.index.tolist()
+                        
+                        # Add base series (solid lines, on top layer)
+                        for w in winners_sorted:
+                            base_sub = base_series[base_series['winner'] == w].sort_values('the_date')
+                            if not base_sub.empty:
+                                fig.add_trace(go.Scatter(
+                                    x=base_sub['the_date'],
+                                    y=base_sub['win_share'] * 100,
+                                    mode='lines',
+                                    name=f'{w} (Base)',
+                                    line=dict(width=2),
+                                    legendgroup=w
+                                ))
+                        
+                        # Add suppressed series (dashed lines, bottom layer)
+                        for w in winners_sorted:
+                            supp_sub = suppressed_series[suppressed_series['winner'] == w].sort_values('the_date')
+                            if not supp_sub.empty:
+                                fig.add_trace(go.Scatter(
+                                    x=supp_sub['the_date'],
+                                    y=supp_sub['win_share'] * 100,
+                                    mode='lines',
+                                    name=f'{w} (Suppressed)',
+                                    line=dict(width=2, dash='dash'),
+                                    legendgroup=w,
+                                    visible='legendonly'  # Hidden by default for clarity
+                                ))
+                        
+                        fig.update_layout(
+                            title=f'Before/After Suppression - {ds} {"Mover" if mover_ind else "Non-Mover"}',
+                            width=1400,
+                            height=700,
+                            xaxis_title='Date',
+                            yaxis_title='Win Share (%)',
+                            hovermode='x unified',
+                            legend=dict(
+                                orientation='v',
+                                yanchor='top',
+                                y=1,
+                                xanchor='left',
+                                x=1.02,
+                                font=dict(size=10)
+                            )
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Show summary stats
+                        total_base = base_series.groupby('winner')['total_wins'].sum()
+                        total_suppressed = suppressed_series.groupby('winner')['total_wins'].sum()
+                        total_removed = total_base - total_suppressed
+                        
+                        summary = pd.DataFrame({
+                            'Winner': total_base.index,
+                            'Base Wins': total_base.values,
+                            'Suppressed Wins': total_suppressed.values,
+                            'Removed': total_removed.values,
+                            'Removed %': (total_removed / total_base * 100).round(2)
+                        }).sort_values('Removed', ascending=False)
+                        
+                        st.subheader('Suppression Summary')
+                        st.dataframe(summary, use_container_width=True)
+                        st.success('✅ Preview generated! Solid lines = base, dashed lines = suppressed (click legend to toggle)')
+                        
+            except Exception as e:
+                st.error(f'❌ Preview failed: {e}')
+                import traceback
+                with st.expander('Show traceback'):
+                    st.code(traceback.format_exc())
 
 
 if __name__ == '__main__':
     ui()
+
