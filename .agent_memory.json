@@ -272,6 +272,7 @@
     "rolling_view_columns": "Rolling views use: avg_wins, stddev_wins, n_periods, selected_window (NOT avg_wins_28d, n_periods_28d)",
     "scan_base_outliers_implementation": "\u2705 CORRECT: Calculates rolling metrics over ENTIRE time series, filters to graph window at end (line 295). Always check WHERE clause is at final SELECT.",
     "nan_handling": "\u2705 FIXED: All CAST operations now check: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...) ELSE 0/NULL",
+    "division_by_zero": "✅ FIXED 2025-10-05: All division operations use NULLIF(denominator, 0) and NaN checks. Distribution algorithm checks m==0 before dividing. Locations: tools/src/plan.py lines 312+487, main.py line 469. Commit: 36cca3a",
     "outlier_graph_fix": "\u2705 FIXED 2025-10-05: scan_base_outliers now returns nat_share_current, nat_market_wins, day_of_week. Graph uses yellow star markers matching carrier_dashboard style."
   },
   "git_workflow": {
@@ -420,6 +421,43 @@
           "key_insight": "Dashed lines must be added FIRST (background layer), solid lines SECOND (foreground layer). Both should be visible to clearly show impact.",
           "file": "main.py lines 749-843",
           "commit": "d783d37: feat(main): update preview graph to match carrier_dashboard formatting"
+        },
+        "suppression_summary_improvements": {
+          "date": "2025-10-05",
+          "issues_fixed": [
+            "Duplicate 'Winner' column (index + column)",
+            "Lowercase percentage column names (old %, removed %, new %)",
+            "Deprecated use_container_width parameter",
+            "No visibility into carriers that couldn't distribute"
+          ],
+          "improvements": [
+            "Track insufficient_threshold_cases when m==0 (no eligible pairs)",
+            "Display expandable table showing carriers that couldn't meet min_wins threshold",
+            "Fixed Suppression Summary table: reset_index(drop=True) to prevent duplicate",
+            "Capitalized column names: Old %, Removed %, New %",
+            "Used .values to extract numpy arrays from Series to prevent index issues",
+            "Replaced use_container_width with width parameter (streamlit 1.50+)",
+            "st.dataframe: width='stretch' (full width)",
+            "st.plotly_chart: width='content' (natural width)"
+          ],
+          "insufficient_threshold_tracking": {
+            "location": "main.py line 390 (list initialization)",
+            "capture": "main.py lines 472-480 (when m==0)",
+            "display": "main.py lines 615-618 (expandable table)",
+            "columns": ["date", "winner", "need_remaining", "auto_removed", "min_wins_required", "reason"]
+          },
+          "summary_table_fix": {
+            "issue": "DataFrame created with index as column caused duplicate 'Winner'",
+            "solution": "Use .values for all columns, then .reset_index(drop=True)",
+            "location": "main.py lines 896-907"
+          },
+          "toggle_functionality": {
+            "working": true,
+            "modes": ["Overlay (Both)", "Original Only", "Suppressed Only"],
+            "implementation": "show_mode radio at line 681, logic at lines 793-794",
+            "rendering": "Suppressed FIRST (dashed background), Original SECOND (solid foreground)"
+          },
+          "commit": "87161f4: fix(main): improve suppression summary table and track insufficient threshold cases"
         }
       }
     }
