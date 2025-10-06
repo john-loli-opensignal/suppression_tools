@@ -218,17 +218,18 @@
           "Implemented 5-step workflow (preview, scan, plan, save, compare)",
           "Added auto + distributed suppression algorithm",
           "Added outlier visualization graph in Step 1",
-          "CSV save working, database persistence TODO"
+          "CSV save working, database persistence TODO",
+          "Preview graph updated with beautiful formatting (2025-10-05)"
         ],
         "testing_guide": "analysis/TESTING_GUIDE.md"
       }
     },
     "what_works": {
       "step_0": "Preview base graph - national win share from cubes",
-      "step_1": "Scan outliers - DOW-aware rolling metrics + visualization graph",
+      "step_1": "Scan outliers - DOW-aware rolling metrics + visualization graph with beautiful formatting",
       "step_2": "Build plan - auto + distributed algorithm (NO 50% cap)",
       "step_3": "Save plan - CSV working (database TODO)",
-      "step_5": "Preview before/after - overlay graph with solid/dashed lines"
+      "step_5": "Preview before/after - overlay graph with matching carrier_dashboard formatting (dashed lines BEHIND solid lines)"
     },
     "key_features": {
       "outlier_detection": {
@@ -397,6 +398,28 @@
             "outliers graph",
             "suppression previews"
           ]
+        },
+        "preview_graph_formatting": {
+          "issue": "Preview graph (Step 5) didn't match beautiful formatting of carrier_dashboard_duckdb.py",
+          "old_behavior": [
+            "Simple solid/dashed lines without smoothing",
+            "No color coordination",
+            "No ranking order",
+            "Suppressed lines hidden by default (visible='legendonly')",
+            "Poor hover text"
+          ],
+          "new_behavior": [
+            "3-period rolling smoothing for visual clarity",
+            "Ranked color palette (Dark24)",
+            "Layered correctly: dashed lines (suppressed) BEHIND solid lines (original)",
+            "Both lines visible by default (no hidden traces)",
+            "Rich hover text with raw/smoothed values",
+            "Subtitle explains visualization",
+            "Matching styling from carrier_dashboard_duckdb.py"
+          ],
+          "key_insight": "Dashed lines must be added FIRST (background layer), solid lines SECOND (foreground layer). Both should be visible to clearly show impact.",
+          "file": "main.py lines 749-843",
+          "commit": "d783d37: feat(main): update preview graph to match carrier_dashboard formatting"
         }
       }
     }
