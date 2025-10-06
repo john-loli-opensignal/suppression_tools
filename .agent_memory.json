@@ -258,11 +258,12 @@
     "missing_assertion": "ALWAYS assert db_path before connection",
     "csv_only": "Save to BOTH database AND CSV for compatibility",
     "nan_to_integer": "ALWAYS check for NULL AND NaN before CAST(...AS INTEGER) - use: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...)",
-    "rolling_metrics_null": "Early dates have NULL rolling metrics - TIERED approach reduces this (28d\u219214d\u21924d)",
+    "rolling_metrics_null": "Early dates have NULL rolling metrics - TIERED approach reduces this (28d→14d→4d)",
     "tiered_window_handling": "Use selected_window column to see which tier was used; filter WHERE selected_window IS NOT NULL to exclude early dates",
     "rolling_view_columns": "Rolling views use: avg_wins, stddev_wins, n_periods, selected_window (NOT avg_wins_28d, n_periods_28d)",
-    "scan_base_outliers_implementation": "\u2705 CORRECT: Calculates rolling metrics over ENTIRE time series, filters to graph window at end (line 295). Always check WHERE clause is at final SELECT.",
-    "nan_handling": "\u2705 FIXED: All CAST operations now check: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...) ELSE 0/NULL"
+    "scan_base_outliers_implementation": "✅ CORRECT: Calculates rolling metrics over ENTIRE time series, filters to graph window at end (line 295). Always check WHERE clause is at final SELECT.",
+    "nan_handling": "✅ FIXED: All CAST operations now check: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...) ELSE 0/NULL",
+    "outlier_graph_fix": "✅ FIXED 2025-10-05: scan_base_outliers now returns nat_share_current, nat_market_wins, day_of_week. Graph uses yellow star markers matching carrier_dashboard style."
   },
   "git_workflow": {
     "branch": "codex-agent",
