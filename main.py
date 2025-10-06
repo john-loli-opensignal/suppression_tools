@@ -40,6 +40,10 @@ def ui():
     egregious_threshold = st.sidebar.slider('Egregious Impact', min_value=10, max_value=100, value=40, step=5,
                                             help='Flag outliers outside top N with impact > this')
     
+    st.sidebar.header('Distribution Thresholds')
+    distributed_min_wins = st.sidebar.slider('Min Wins for Distribution', min_value=5, max_value=50, value=25, step=5,
+                                             help='Minimum current wins for pair to be eligible for distributed suppression')
+    
     # Advanced filters (optional)
     with st.sidebar.expander('🔍 Advanced Filters', expanded=False):
         st.caption('Optional: Further refine carrier selection')
@@ -454,9 +458,12 @@ def ui():
                                 need_remaining = max(0, need - auto_removed)
                                 
                                 if need_remaining > 0:
-                                    # Distribute evenly across all pairs (fair distribution)
+                                    # Distribute evenly across eligible pairs (minimum threshold)
                                     all_pairs = sub[['loser', 'dma_name', 'pair_wins_current']].copy()
                                     all_pairs['capacity'] = pd.to_numeric(all_pairs['pair_wins_current'], errors='coerce').fillna(0.0)
+                                    
+                                    # Filter to pairs meeting minimum threshold
+                                    all_pairs = all_pairs[all_pairs['capacity'] >= distributed_min_wins]
                                     
                                     m = len(all_pairs)
                                     base_per_pair = need_remaining // m
@@ -739,58 +746,101 @@ def ui():
                         suppressed_series['win_share'] = suppressed_series['suppressed_wins'] / suppressed_series['market_total']
                         suppressed_series = suppressed_series.rename(columns={'suppressed_wins': 'total_wins'})
                         
-                        # Create overlay chart (solid base, dashed suppressed)
-                        fig = go.Figure()
-                        
-                        # Sort winners by total base win share
-                        winner_totals = base_series.groupby('winner')['win_share'].sum().sort_values(ascending=False)
+                        # Create overlay chart with beautiful formatting (matching carrier_dashboard_duckdb.py)
+                        # Sort winners by total base wins (ascending for proper ranking)
+                        winner_totals = base_series.groupby('winner')['total_wins'].sum().sort_values(ascending=False)
                         winners_sorted = winner_totals.index.tolist()
                         
-                        # Add base series (solid lines, on top layer)
-                        for w in winners_sorted:
-                            base_sub = base_series[base_series['winner'] == w].sort_values('the_date')
-                            if not base_sub.empty:
-                                fig.add_trace(go.Scatter(
-                                    x=base_sub['the_date'],
-                                    y=base_sub['win_share'] * 100,
-                                    mode='lines',
-                                    name=f'{w} (Base)',
-                                    line=dict(width=2),
-                                    legendgroup=w
-                                ))
+                        # Use same color palette with ranking
+                        palette = px.colors.qualitative.Dark24
+                        color_map = {c: palette[i % len(palette)] for i, c in enumerate(winners_sorted)}
                         
-                        # Add suppressed series (dashed lines, bottom layer)
+                        fig = go.Figure()
+                        
+                        # FIRST LAYER: Add suppressed series (dashed lines, background)
                         for w in winners_sorted:
                             supp_sub = suppressed_series[suppressed_series['winner'] == w].sort_values('the_date')
                             if not supp_sub.empty:
+                                series = supp_sub['win_share'] * 100
+                                
+                                # Apply 3-period rolling smoothing
+                                if len(series) >= 3:
+                                    smooth = series.rolling(window=3, center=True, min_periods=1).mean()
+                                else:
+                                    smooth = series
+                                
+                                hover_text = [
+                                    f"{w} (SUPPRESSED)<br>{d.date()}<br>Share: {s:.4f}%"
+                                    for d, s in zip(supp_sub['the_date'], smooth)
+                                ]
+                                
                                 fig.add_trace(go.Scatter(
                                     x=supp_sub['the_date'],
-                                    y=supp_sub['win_share'] * 100,
+                                    y=smooth,
                                     mode='lines',
-                                    name=f'{w} (Suppressed)',
-                                    line=dict(width=2, dash='dash'),
+                                    name=f'{w} (After)',
+                                    line=dict(color=color_map[w], width=2, dash='dash'),
                                     legendgroup=w,
-                                    visible='legendonly'  # Hidden by default for clarity
+                                    hoverinfo='text',
+                                    hovertext=hover_text,
+                                    opacity=0.7
+                                ))
+                        
+                        # SECOND LAYER: Add base series (solid lines, foreground)
+                        for w in winners_sorted:
+                            base_sub = base_series[base_series['winner'] == w].sort_values('the_date')
+                            if not base_sub.empty:
+                                series = base_sub['win_share'] * 100
+                                
+                                # Apply 3-period rolling smoothing
+                                if len(series) >= 3:
+                                    smooth = series.rolling(window=3, center=True, min_periods=1).mean()
+                                else:
+                                    smooth = series
+                                
+                                # Create hover text with raw and smoothed values
+                                raw_vals = series.round(4).astype(str)
+                                smooth_vals = smooth.round(4).astype(str)
+                                hover_text = [
+                                    f"{w} (ORIGINAL)<br>{d.date()}<br>raw: {r}%<br>smoothed: {s}%"
+                                    for d, r, s in zip(base_sub['the_date'], raw_vals, smooth_vals)
+                                ]
+                                
+                                fig.add_trace(go.Scatter(
+                                    x=base_sub['the_date'],
+                                    y=smooth,
+                                    mode='lines',
+                                    name=f'{w} (Before)',
+                                    line=dict(color=color_map[w], width=2.5),
+                                    legendgroup=w,
+                                    hoverinfo='text',
+                                    hovertext=hover_text
                                 ))
                         
                         fig.update_layout(
-                            title=f'Before/After Suppression - {ds} {"Mover" if mover_ind else "Non-Mover"}',
-                            width=1400,
+                            title=dict(
+                                text=f'Before/After Suppression - {ds} {"Mover" if mover_ind else "Non-Mover"}<br>'
+                                     '<sub>Solid lines = Original | Dashed lines = After Suppression</sub>',
+                                x=0.01,
+                                xanchor='left'
+                            ),
+                            width=1200,
                             height=700,
                             xaxis_title='Date',
                             yaxis_title='Win Share (%)',
-                            hovermode='x unified',
+                            hovermode='closest',
                             legend=dict(
                                 orientation='v',
-                                yanchor='top',
-                                y=1,
+                                yanchor='middle',
+                                y=0.5,
                                 xanchor='left',
                                 x=1.02,
                                 font=dict(size=10)
-                            )
+                            ),
+                            margin=dict(l=40, r=250, t=100, b=40)
                         )
                         
-                        st.plotly_chart(fig, width='stretch')
+                        st.plotly_chart(fig, use_container_width=False, config={'displayModeBar': False})
                         
                         # Show summary stats
                         total_base = base_series.groupby('winner')['total_wins'].sum()
