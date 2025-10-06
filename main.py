@@ -466,26 +466,32 @@ def ui():
                                     all_pairs = all_pairs[all_pairs['capacity'] >= distributed_min_wins]
                                     
                                     m = len(all_pairs)
-                                    base_per_pair = need_remaining // m
-                                    all_pairs['rm_base'] = np.minimum(all_pairs['capacity'], base_per_pair).astype(int)
                                     
-                                    # Distribute remainder
-                                    distributed_so_far = int(all_pairs['rm_base'].sum())
-                                    remainder = max(0, need_remaining - distributed_so_far)
-                                    
-                                    all_pairs['residual'] = (all_pairs['capacity'] - all_pairs['rm_base']).astype(int)
-                                    all_pairs = all_pairs.sort_values(
-                                        ['residual', 'capacity'],
-                                        ascending=[False, False]
-                                    ).reset_index(drop=True)
-                                    
-                                    all_pairs['extra'] = 0
-                                    if remainder > 0:
-                                        eligible_idx = all_pairs.index[all_pairs['residual'] > 0][:remainder]
-                                        all_pairs.loc[eligible_idx, 'extra'] = 1
-                                    
-                                    all_pairs['rm_final'] = (all_pairs['rm_base'] + all_pairs['extra']).astype(int)
-                                    distributed_final = all_pairs[all_pairs['rm_final'] > 0]
+                                    # Check if we have eligible pairs to distribute to
+                                    if m == 0:
+                                        st.warning(f'⚠️ No eligible pairs for distribution on {the_date} for {winner} (need {distributed_min_wins}+ wins)')
+                                        distributed_final = pd.DataFrame()
+                                    else:
+                                        base_per_pair = need_remaining // m
+                                        all_pairs['rm_base'] = np.minimum(all_pairs['capacity'], base_per_pair).astype(int)
+                                        
+                                        # Distribute remainder
+                                        distributed_so_far = int(all_pairs['rm_base'].sum())
+                                        remainder = max(0, need_remaining - distributed_so_far)
+                                        
+                                        all_pairs['residual'] = (all_pairs['capacity'] - all_pairs['rm_base']).astype(int)
+                                        all_pairs = all_pairs.sort_values(
+                                            ['residual', 'capacity'],
+                                            ascending=[False, False]
+                                        ).reset_index(drop=True)
+                                        
+                                        all_pairs['extra'] = 0
+                                        if remainder > 0:
+                                            eligible_idx = all_pairs.index[all_pairs['residual'] > 0][:remainder]
+                                            all_pairs.loc[eligible_idx, 'extra'] = 1
+                                        
+                                        all_pairs['rm_final'] = (all_pairs['rm_base'] + all_pairs['extra']).astype(int)
+                                        distributed_final = all_pairs[all_pairs['rm_final'] > 0]
                                 else:
                                     distributed_final = pd.DataFrame()
                                 

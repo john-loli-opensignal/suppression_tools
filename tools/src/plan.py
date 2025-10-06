@@ -306,12 +306,14 @@ def scan_base_outliers(
                 selected_window,
                 nat_total_wins * 1.0 / NULLIF(nat_market_wins, 0) as nat_share_current,
                 CASE 
-                    WHEN nat_sigma_wins > 0 AND nat_mu_wins IS NOT NULL AND NOT isnan(nat_mu_wins) THEN 
-                        (nat_total_wins - nat_mu_wins) / nat_sigma_wins
+                    WHEN nat_sigma_wins > 0 AND nat_sigma_wins IS NOT NULL 
+                         AND nat_mu_wins IS NOT NULL AND NOT isnan(nat_mu_wins) 
+                         AND NOT isnan(nat_sigma_wins) THEN 
+                        (nat_total_wins - nat_mu_wins) / NULLIF(nat_sigma_wins, 0)
                     ELSE 0 
                 END as nat_z_score,
                 CASE 
-                    WHEN nat_mu_wins IS NOT NULL AND NOT isnan(nat_mu_wins) AND nat_mu_wins > 0 THEN 
+                    WHEN nat_mu_wins IS NOT NULL AND NOT isnan(nat_mu_wins) THEN 
                         CAST(ROUND(nat_total_wins - nat_mu_wins) AS INTEGER)
                     ELSE 0
                 END as impact
@@ -478,8 +480,10 @@ def build_enriched_cube(
                 n.nat_sigma_share,
                 -- National z-score
                 CASE 
-                    WHEN n.nat_sigma_wins > 0 AND n.nat_mu_wins IS NOT NULL AND NOT isnan(n.nat_mu_wins) THEN 
-                        (n.nat_total_wins - n.nat_mu_wins) / n.nat_sigma_wins
+                    WHEN n.nat_sigma_wins > 0 AND n.nat_sigma_wins IS NOT NULL 
+                         AND n.nat_mu_wins IS NOT NULL AND NOT isnan(n.nat_mu_wins) 
+                         AND NOT isnan(n.nat_sigma_wins) THEN 
+                        (n.nat_total_wins - n.nat_mu_wins) / NULLIF(n.nat_sigma_wins, 0)
                     ELSE 0 
                 END as nat_z_score,
                 -- National impact (sum of all pair impacts)
