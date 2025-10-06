@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 import plotly.graph_objs as go
+import plotly.express as px
 import tools.db as db
 from tools.src.plan import (
     get_top_n_carriers,
@@ -72,27 +73,48 @@ def ui():
                 if ts.empty:
                     st.warning('No data found for selected winners in this date range.')
                 else:
+                    # Use the same palette from carrier dashboard
+                    palette = px.colors.qualitative.Dark24
+                    carriers = sorted(ts['winner'].unique())
+                    color_map = {c: palette[i % len(palette)] for i, c in enumerate(carriers)}
+                    
                     fig = go.Figure()
-                    for w in sorted(ts['winner'].unique()):
-                        sub = ts[ts['winner'] == w]
+                    for w in carriers:
+                        sub = ts[ts['winner'] == w].sort_values('the_date')
+                        series = sub['win_share'] * 100  # Convert to percentage
+                        
+                        # Apply 3-period rolling smoothing
+                        if len(series) >= 3:
+                            smooth = series.rolling(window=3, center=True, min_periods=1).mean()
+                        else:
+                            smooth = series
+                        
+                        # Create hover text
+                        hover_text = [
+                            f"{w}<br>{d.date()}<br>raw: {r:.4f}%<br>smoothed: {s:.4f}%"
+                            for d, r, s in zip(sub['the_date'], series, smooth)
+                        ]
+                        
                         fig.add_trace(go.Scatter(
                             x=sub['the_date'],
-                            y=sub['win_share'] * 100,  # Convert to percentage
+                            y=smooth,
                             mode='lines',
                             name=w,
-                            line=dict(width=2)
+                            line=dict(color=color_map[w], width=2),
+                            hoverinfo='text',
+                            hovertext=hover_text
                         ))
                     
                     fig.update_layout(
-                        title=f'National Win Share - {ds} {"Mover" if mover_ind else "Non-Mover"}',
-                        width=1200,
-                        height=600,
+                        title=dict(text=f'National Win Share - {ds} {"Mover" if mover_ind else "Non-Mover"}', x=0.01, xanchor='left'),
+                        width=1100,
+                        height=650,
                         xaxis_title='Date',
                         yaxis_title='Win Share (%)',
-                        hovermode='x unified',
-                        legend=dict(orientation='v', yanchor='top', y=1, xanchor='left', x=1.02)
+                        legend=dict(orientation='v', x=1.02, y=0.5),
+                        margin=dict(l=40, r=200, t=80, b=40)
                     )
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=False, config={'displayModeBar': False})
                     st.success(f'✅ Loaded {len(ts):,} data points for {len(winners)} carriers')
             except Exception as e:
                 st.error(f'Failed to load base graph: {e}')
@@ -165,64 +187,139 @@ def ui():
                         )
                         ts_with_outliers['is_outlier'] = ts_with_outliers['is_outlier'].fillna(False)
                         
+                        # Use same color palette
+                        palette = px.colors.qualitative.Dark24
+                        color_map = {c: palette[i % len(palette)] for i, c in enumerate(flagged_carriers)}
+                        
                         # Create figure
                         fig = go.Figure()
                         
-                        # Add base lines for each carrier
+                        # Add base lines for each carrier with smoothing
                         for w in sorted(flagged_carriers):
-                            sub = ts_with_outliers[ts_with_outliers['winner'] == w]
+                            sub = ts_with_outliers[ts_with_outliers['winner'] == w].sort_values('the_date')
+                            series = sub['win_share'] * 100  # Convert to percentage
+                            
+                            # Apply 3-period rolling smoothing
+                            if len(series) >= 3:
+                                smooth = series.rolling(window=3, center=True, min_periods=1).mean()
+                            else:
+                                smooth = series
+                            
+                            # Create hover text
+                            raw_vals = series.round(4).astype(str)
+                            smooth_vals = smooth.round(4).astype(str)
+                            hover_text = [
+                                f"{w}<br>{d.date()}<br>raw: {r}%<br>smoothed: {s}%"
+                                for d, r, s in zip(sub['the_date'], raw_vals, smooth_vals)
+                            ]
+                            
                             fig.add_trace(go.Scatter(
                                 x=sub['the_date'],
-                                y=sub['win_share'] * 100,
+                                y=smooth,
                                 mode='lines',
                                 name=w,
-                                line=dict(width=2)
+                                line=dict(color=color_map[w], width=2),
+                                hoverinfo='text',
+                                hovertext=hover_text
                             ))
                         
-                        # Add outlier markers (stars for positive outliers)
+                        # Add outlier markers - separate positive and negative
                         for w in sorted(flagged_carriers):
                             outlier_sub = ts_with_outliers[
                                 (ts_with_outliers['winner'] == w) & 
                                 (ts_with_outliers['is_outlier'] == True)
                             ]
                             if not outlier_sub.empty:
-                                hover_text = [
-                                    f"{w}<br>Date: {d.date()}<br>Share: {s*100:.2f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
-                                    for d, s, z, imp in zip(
-                                        outlier_sub['the_date'], 
-                                        outlier_sub['win_share'],
-                                        outlier_sub['nat_z_score'].fillna(0),
-                                        outlier_sub['impact'].fillna(0)
-                                    )
-                                ]
-                                fig.add_trace(go.Scatter(
-                                    x=outlier_sub['the_date'],
-                                    y=outlier_sub['win_share'] * 100,
-                                    mode='markers',
-                                    name=f'{w} (outlier)',
-                                    marker=dict(
-                                        symbol='star', 
-                                        color='yellow', 
-                                        size=12, 
-                                        line=dict(color='black', width=1),
-                                        opacity=0.95
-                                    ),
-                                    showlegend=False,
-                                    hoverinfo='text',
-                                    hovertext=hover_text
-                                ))
+                                # Get smoothed values for marker positioning
+                                series = outlier_sub['win_share'] * 100
+                                if len(series) >= 3:
+                                    y_marker = series.rolling(window=3, center=True, min_periods=1).mean()
+                                else:
+                                    y_marker = series
+                                
+                                # Split into positive and negative z-scores
+                                pos_out = outlier_sub[outlier_sub['nat_z_score'] >= 0]
+                                neg_out = outlier_sub[outlier_sub['nat_z_score'] < 0]
+                                
+                                # Positive outliers (yellow stars)
+                                if not pos_out.empty:
+                                    pos_series = pos_out['win_share'] * 100
+                                    if len(pos_series) >= 3:
+                                        pos_y = pos_series.rolling(window=3, center=True, min_periods=1).mean()
+                                    else:
+                                        pos_y = pos_series
+                                    
+                                    hover_text = [
+                                        f"{w}<br>{d.date()}<br>Share: {s:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
+                                        for d, s, z, imp in zip(
+                                            pos_out['the_date'], 
+                                            pos_y,
+                                            pos_out['nat_z_score'].fillna(0),
+                                            pos_out['impact'].fillna(0)
+                                        )
+                                    ]
+                                    fig.add_trace(go.Scatter(
+                                        x=pos_out['the_date'],
+                                        y=pos_y,
+                                        mode='markers',
+                                        name=f'{w} outlier (+)',
+                                        marker=dict(
+                                            symbol='star', 
+                                            color='yellow', 
+                                            size=11, 
+                                            line=dict(color='black', width=0.6),
+                                            opacity=0.95
+                                        ),
+                                        showlegend=False,
+                                        hoverinfo='text',
+                                        hovertext=hover_text
+                                    ))
+                                
+                                # Negative outliers (red minus signs)
+                                if not neg_out.empty:
+                                    neg_series = neg_out['win_share'] * 100
+                                    if len(neg_series) >= 3:
+                                        neg_y = neg_series.rolling(window=3, center=True, min_periods=1).mean()
+                                    else:
+                                        neg_y = neg_series
+                                    
+                                    hover_text = [
+                                        f"{w}<br>{d.date()}<br>Share: {s:.4f}%<br>Z-score: {z:.2f}<br>Impact: {int(imp)}"
+                                        for d, s, z, imp in zip(
+                                            neg_out['the_date'], 
+                                            neg_y,
+                                            neg_out['nat_z_score'].fillna(0),
+                                            neg_out['impact'].fillna(0)
+                                        )
+                                    ]
+                                    fig.add_trace(go.Scatter(
+                                        x=neg_out['the_date'],
+                                        y=neg_y,
+                                        mode='markers',
+                                        name=f'{w} outlier (-)',
+                                        marker=dict(
+                                            symbol='line-ew', 
+                                            color='red', 
+                                            size=12, 
+                                            line=dict(color='black', width=0.6),
+                                            opacity=0.95
+                                        ),
+                                        showlegend=False,
+                                        hoverinfo='text',
+                                        hovertext=hover_text
+                                    ))
                         
                         fig.update_layout(
-                            title=f'National Outliers - {ds} {"Mover" if mover_ind else "Non-Mover"}',
-                            width=1200,
-                            height=600,
+                            title=dict(text=f'National Outliers - {ds} {"Mover" if mover_ind else "Non-Mover"}', x=0.01, xanchor='left'),
+                            width=1100,
+                            height=650,
                             xaxis_title='Date',
                             yaxis_title='Win Share (%)',
-                            hovermode='x unified',
-                            legend=dict(orientation='v', yanchor='top', y=1, xanchor='left', x=1.02)
+                            legend=dict(orientation='v', x=1.02, y=0.5),
+                            margin=dict(l=40, r=200, t=80, b=40)
                         )
                         
-                        st.plotly_chart(fig, config={'displayModeBar': False})
+                        st.plotly_chart(fig, use_container_width=False, config={'displayModeBar': False})
                 except Exception as e:
                     st.warning(f'Could not generate outlier graph: {e}')
                     import traceback
