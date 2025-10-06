@@ -412,7 +412,7 @@ def build_enriched_cube(
                     ELSE CAST(total_wins AS INTEGER)  -- First appearances: all wins are "excess"
                 END as pair_impact
             FROM {rolling_view}
-            WHERE selected_window IS NOT NULL  -- Only include dates with valid rolling metrics
+            WHERE (selected_window IS NOT NULL OR is_first_appearance = true)  -- Include valid rolling metrics OR first appearances
                 -- Note: No volume filter here - we need all pairs for carriers with national outliers
                 -- Volume filtering happens in plan building (auto stage) and distributed stage
         ),
