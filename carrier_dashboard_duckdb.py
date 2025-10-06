@@ -485,7 +485,7 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
 @st.cache_data
 def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitors: list, metric: str, window: int, z_thresh: float, start_date: str, end_date: str) -> pd.DataFrame:
     # Defensive local import to avoid Streamlit cache scope issues
-    from suppression_tools.src import metrics as _metrics
+    from tools.src import metrics as _metrics
     if not primary or not competitors:
         return pd.DataFrame(columns=["the_date", "winner", metric])
 
