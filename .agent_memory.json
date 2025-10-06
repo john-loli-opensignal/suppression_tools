@@ -285,6 +285,28 @@
     {
       "date": "2025-10-05",
       "updates": {
+        "main_py_ux_refactor": {
+          "issue": "Base graph disappeared when clicking 'Scan for Outliers'. Spectrum and major carriers missing from scan results.",
+          "root_causes": [
+            "Step 0 'Preview Base Graph' was in separate button block - didn't persist",
+            "Scan section only queried flagged carriers (line 168: winners=flagged_carriers)",
+            "Two separate graphs instead of one unified view",
+            "173 lines of duplicate graphing code"
+          ],
+          "fixes_applied": [
+            "Removed Step 0 'Preview Base Graph' section entirely",
+            "Scan now queries ALL top N carriers (not just flagged)",
+            "Single unified graph showing all carriers + outlier markers",
+            "Removed duplicate graphing code (912 lines → 739 lines)",
+            "Graph shows even when zero outliers detected"
+          ],
+          "key_insight": "UX should be: 1 button → 1 graph → all data visible. Don't split into separate preview and scan views.",
+          "file": "main.py lines 46-269 (refactored from 44-442)",
+          "commits": [
+            "4b43861: show ALL top carriers in scan graph",
+            "1b36fe6: consolidate base+scan into single section"
+          ]
+        },
         "main_py_graphing_fixes": {
           "issue": "Outliers not displaying correctly - appeared in wrong places, colors not ranked",
           "root_causes": [
