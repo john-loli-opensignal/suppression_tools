@@ -41,8 +41,8 @@ def ui():
                                             help='Flag outliers outside top N with impact > this')
     
     st.sidebar.header('Distribution Thresholds')
-    distributed_min_wins = st.sidebar.slider('Min Wins for Distribution', min_value=5, max_value=50, value=25, step=5,
-                                             help='Minimum current wins for pair to be eligible for distributed suppression')
+    distributed_min_wins = st.sidebar.slider('Min Wins for Distribution', min_value=1, max_value=50, value=2, step=1,
+                                             help='Minimum current wins for pair to be eligible for distributed suppression (default: 2)')
     
     # Advanced filters (optional)
     with st.sidebar.expander('🔍 Advanced Filters', expanded=False):
