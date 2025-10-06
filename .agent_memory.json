@@ -4,7 +4,10 @@
       "date": "2025-10-05",
       "change": "Streamlit 1.50.0 deprecated use_container_width parameter",
       "fix": "Replace use_container_width=True with width='stretch', use_container_width=False with width='content'",
-      "affected_methods": ["st.plotly_chart()", "st.dataframe()"],
+      "affected_methods": [
+        "st.plotly_chart()",
+        "st.dataframe()"
+      ],
       "commit": "33263dc"
     }
   },
@@ -47,7 +50,12 @@
   },
   "carrier_characteristics": {
     "large_concentrated": {
-      "examples": ["AT&T", "Verizon", "T-Mobile", "Spectrum"],
+      "examples": [
+        "AT&T",
+        "Verizon",
+        "T-Mobile",
+        "Spectrum"
+      ],
       "pair_pattern": "Few DMAs, high volume per pair (50-200 wins)",
       "outlier_pattern": "Single pair spikes dominate national outliers",
       "threshold_recommendations": {
@@ -56,13 +64,88 @@
       }
     },
     "small_distributed": {
-      "examples": ["Windstream", "Hughes", "Consolidated"],
+      "examples": [
+        "Windstream",
+        "Hughes",
+        "Consolidated"
+      ],
       "pair_pattern": "Many DMAs, low volume per pair (1-5 wins)",
       "outlier_pattern": "National outliers from cumulative effect of many small pair spikes",
       "threshold_recommendations": {
         "auto_min_wins": "1-2",
         "distributed_min_wins": "1"
       }
+    }
+  },
+  "outlier_detection": {
+    "two_different_algorithms": {
+      "carrier_dashboard_duckdb": {
+        "function": "db.national_outliers_from_cube()",
+        "day_grouping": "3 types (Sat/Sun/Weekday)",
+        "window_strategy": "Fixed single window (e.g., 14 days)",
+        "rolling_scope": "Within specified window only",
+        "carrier_scope": "All carriers",
+        "use_case": "Exploratory analysis, fast visualization",
+        "location": "tools/db.py::national_outliers_from_cube()"
+      },
+      "main_py_suppression_tool": {
+        "function": "scan_base_outliers()",
+        "day_grouping": "7 types (DOW 1-7 for each day of week)",
+        "window_strategy": "Tiered: tries 28d → 14d → 4d based on data availability",
+        "rolling_scope": "Entire time series, then filter to graph window",
+        "carrier_scope": "Top N carriers + egregious outliers (impact > threshold)",
+        "additional_filters": "Optional minimum share % threshold",
+        "use_case": "Production suppression planning, robust to sparse data",
+        "location": "tools/src/plan.py::scan_base_outliers()"
+      },
+      "why_different_results": "Intentional - they serve different purposes. carrier_dashboard for exploration, main.py for production suppression.",
+      "alignment_not_needed": "Recommended to keep them different"
+    },
+    "configurable_thresholds": {
+      "national_level": {
+        "z_score": {
+          "default": 2.5,
+          "range": "0.5 to 5.0",
+          "location": "main.py sidebar slider: 'National Z-Score Threshold'"
+        },
+        "egregious_impact": {
+          "default": 40,
+          "range": "10 to 100",
+          "description": "Flags outliers outside top N",
+          "location": "main.py sidebar slider: 'Egregious Impact'"
+        }
+      },
+      "dma_pair_level": {
+        "z_score": {
+          "default": 1.5,
+          "range": "0.5 to 5.0",
+          "location": "main.py sidebar slider: 'DMA Z-Score Threshold'",
+          "usage": "build_enriched_cube(dma_z_threshold=...)"
+        },
+        "pct_change": {
+          "default": 30.0,
+          "range": "10.0 to 100.0",
+          "location": "main.py sidebar slider: 'DMA % Change Threshold'",
+          "usage": "build_enriched_cube(dma_pct_threshold=...)"
+        },
+        "rare_pair_impact": {
+          "default": 15,
+          "range": "5 to 50",
+          "description": "Minimum impact for rare pairs (appearance_rank <= 5)",
+          "location": "main.py sidebar slider: 'Rare Pair Impact'",
+          "usage": "build_enriched_cube(rare_pair_impact_threshold=...)"
+        }
+      }
+    },
+    "dow_aware_rolling_windows": {
+      "tiered_logic": {
+        "28d_window": "Weekday: needs 4+ DOW samples, Weekend: needs 2+ DOW samples",
+        "14d_window": "Same requirements as fallback",
+        "4d_window": "Minimum threshold as last resort",
+        "description": "Tries longest window first, falls back to shorter if insufficient data"
+      },
+      "dow_definition": "1=Sunday, 2=Monday, ..., 7=Saturday (DuckDB DAYOFWEEK())",
+      "verified": "Aug 3, 2025 is Sunday (dow=1) ✅"
     }
   }
 }
