@@ -166,7 +166,16 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
                     # Guard: metric column may be missing under rare cache paths; fall back to smoothed line
                     has_metric = metric in pos_out.columns
                     vals_pos = pd.to_numeric(pos_out[metric], errors='coerce') if has_metric else None
-                    if zvals is not None and dayt is not None and has_metric:
+                    
+                    # Build hover text with special handling for wins_per_loss
+                    if metric == 'wins_per_loss' and 'raw_wins' in pos_out.columns and 'raw_losses' in pos_out.columns and has_metric:
+                        hover_o_pos = []
+                        for idx, (d, v, z, dt) in enumerate(zip(pos_out['the_date'], vals_pos.fillna(0), pos_out['zscore'].round(2).astype(str), pos_out['day_type'])):
+                            row_idx = pos_out.index[idx]
+                            raw_w = int(pos_out.loc[row_idx, 'raw_wins']) if pd.notna(pos_out.loc[row_idx, 'raw_wins']) else 0
+                            raw_l = int(pos_out.loc[row_idx, 'raw_losses']) if pd.notna(pos_out.loc[row_idx, 'raw_losses']) else 0
+                            hover_o_pos.append(f"{carrier}<br>{d.date()}<br>Wins: {raw_w:,}<br>Losses: {raw_l:,}<br>Ratio: {v:.3f}<br>z: {z}<br>{dt}")
+                    elif zvals is not None and dayt is not None and has_metric:
                         hover_o_pos = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}<br>z: {z}<br>{dt}"
                                        for d, v, z, dt in zip(pos_out['the_date'], vals_pos.fillna(0), pos_out['zscore'].round(2).astype(str), pos_out['day_type'])]
                     elif has_metric:
@@ -186,7 +195,16 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
                 if not neg_out.empty:
                     has_metric_n = metric in neg_out.columns
                     vals_neg = pd.to_numeric(neg_out[metric], errors='coerce') if has_metric_n else None
-                    if has_metric_n:
+                    
+                    # Build hover text with special handling for wins_per_loss
+                    if metric == 'wins_per_loss' and 'raw_wins' in neg_out.columns and 'raw_losses' in neg_out.columns and has_metric_n:
+                        hover_o_neg = []
+                        for idx, (d, v, z, dt) in enumerate(zip(neg_out['the_date'], vals_neg.fillna(0), neg_out['zscore'].round(2).astype(str), neg_out['day_type'])):
+                            row_idx = neg_out.index[idx]
+                            raw_w = int(neg_out.loc[row_idx, 'raw_wins']) if pd.notna(neg_out.loc[row_idx, 'raw_wins']) else 0
+                            raw_l = int(neg_out.loc[row_idx, 'raw_losses']) if pd.notna(neg_out.loc[row_idx, 'raw_losses']) else 0
+                            hover_o_neg.append(f"{carrier}<br>{d.date()}<br>Wins: {raw_w:,}<br>Losses: {raw_l:,}<br>Ratio: {v:.3f}<br>z: {z}<br>{dt}")
+                    elif has_metric_n:
                         hover_o_neg = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}<br>z: {z}<br>{dt}"
                                        for d, v, z, dt in zip(neg_out['the_date'], vals_neg.fillna(0), neg_out['zscore'].round(2).astype(str), neg_out['day_type'])]
                     else:
