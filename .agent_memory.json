@@ -21,7 +21,13 @@
     "cube_tables": {
       "pattern": "{ds}_{win|loss}_{mover|non_mover}_cube",
       "level": "Aggregated at date, state, dma_name, winner, loser",
-      "indexes": ["date", "state", "dma", "winner", "loser"],
+      "indexes": [
+        "date",
+        "state",
+        "dma",
+        "winner",
+        "loser"
+      ],
       "performance": "Sub-second queries on 6-10GB datasets"
     },
     "census_cube_tables": {
@@ -32,11 +38,23 @@
     "rolling_views": {
       "pattern": "{ds}_win_{mover|non_mover}_rolling",
       "columns": [
-        "the_date", "day_of_week", "winner", "loser", "dma", "dma_name", "state",
-        "total_wins", "record_count",
-        "avg_wins", "stddev_wins", "n_periods", "selected_window",
-        "zscore", "pct_change",
-        "is_first_appearance", "is_outlier",
+        "the_date",
+        "day_of_week",
+        "winner",
+        "loser",
+        "dma",
+        "dma_name",
+        "state",
+        "total_wins",
+        "record_count",
+        "avg_wins",
+        "stddev_wins",
+        "n_periods",
+        "selected_window",
+        "zscore",
+        "pct_change",
+        "is_first_appearance",
+        "is_outlier",
         "appearance_rank"
       ],
       "note": "DOW-aware rolling metrics with TIERED windows (28d preferred, fall back to 14d, then 4d)",
@@ -52,8 +70,12 @@
       "purpose": "Combines pair-level + national-level metrics for UI",
       "columns": [
         "All from rolling view",
-        "nat_total_wins", "nat_market_wins", "nat_share_current",
-        "nat_mu_share", "nat_sigma_share", "nat_z_score"
+        "nat_total_wins",
+        "nat_market_wins",
+        "nat_share_current",
+        "nat_mu_share",
+        "nat_sigma_share",
+        "nat_z_score"
       ],
       "note": "Created on-demand for main.py, filtered to graph window"
     },
@@ -77,7 +99,7 @@
         "national": 2.5,
         "dma_pairs": 1.5,
         "census_blocks": 3.0,
-        "note": "DOW-partitioned rolling windows with TIERED fallback (28d→14d→4d)"
+        "note": "DOW-partitioned rolling windows with TIERED fallback (28d\u219214d\u21924d)"
       },
       "percentage_spike": {
         "threshold": 30,
@@ -172,28 +194,62 @@
     }
   },
   "main_py_restoration": {
-    "status": "Phase 2 Complete - Testing main.py UI",
-    "plan_location": "analysis/main_py_restoration_plan.md",
-    "summary_location": "analysis/restoration_summary.md",
-    "approach": "Phase-by-phase with validation at each step",
-    "estimated_hours": 13,
-    "phase_1_complete": true,
-    "phase_2_complete": true,
-    "phase_2_status": "✅ All helper functions working, NaN fixes applied, main.py running on port 8502",
-    "decisions_made": {
-      "z_score_thresholds": "UI sliders with defaults (nat: 2.5, dma: 1.5)",
-      "egregious_threshold": "Impact > 40 (national level)",
-      "top_n_scope": "Entire time series for stability",
-      "first_appearance": "DMA level (not census block)",
-      "round_conflicts": "Error with overwrite option + alert box",
-      "enriched_view_scope": "Graph window for performance",
-      "max_suppression_cap": "NO CAP - remove full excess (user requirement)",
-      "rare_pairs": "Only if z-score violation AND impact > 15",
-      "legacy_mode": "Keep toggle for old rare pair detection",
-      "impact_configurable": "Yes, default to 40"
+    "status": "Phase 2 COMPLETE \u2705",
+    "completed_date": "2025-10-05",
+    "phases": {
+      "phase_1": {
+        "status": "COMPLETE",
+        "date": "2025-10-04",
+        "changes": "Migrated tools/src/plan.py from parquet to database queries"
+      },
+      "phase_2": {
+        "status": "COMPLETE",
+        "date": "2025-10-05",
+        "changes": [
+          "Updated main.py to use database-backed functions",
+          "Implemented 5-step workflow (preview, scan, plan, save, compare)",
+          "Added auto + distributed suppression algorithm",
+          "Added outlier visualization graph in Step 1",
+          "CSV save working, database persistence TODO"
+        ],
+        "testing_guide": "analysis/TESTING_GUIDE.md"
+      }
     },
-    "test_date": "2025-06-19",
-    "benchmark": "Known outliers from previous analysis"
+    "what_works": {
+      "step_0": "Preview base graph - national win share from cubes",
+      "step_1": "Scan outliers - DOW-aware rolling metrics + visualization graph",
+      "step_2": "Build plan - auto + distributed algorithm (NO 50% cap)",
+      "step_3": "Save plan - CSV working (database TODO)",
+      "step_5": "Preview before/after - overlay graph with solid/dashed lines"
+    },
+    "key_features": {
+      "outlier_detection": {
+        "auto_stage_triggers": [
+          "pair_outlier_pos (z-score > 1.5)",
+          "pct_outlier_pos (30% spike)",
+          "rare_pair (IF z-score > 1.5 AND impact > 15)",
+          "new_pair (first appearance at DMA level)"
+        ],
+        "removal_amount": "FULL excess (current - baseline), NO 50% CAP",
+        "distributed_stage": "Fair allocation across all pairs"
+      },
+      "configurable_params": {
+        "z_threshold": "Slider 0.5-5.0 (default: 2.5)",
+        "top_n": "Slider 10-100 (default: 50)",
+        "egregious_threshold": "Slider 10-100 (default: 40)"
+      },
+      "graphs": {
+        "step_0": "Base national win share line chart",
+        "step_1": "Time series with X markers on outlier dates",
+        "step_5": "Overlay: solid=base, dashed=suppressed"
+      }
+    },
+    "next_steps": [
+      "User testing and validation",
+      "Database persistence for suppressions schema",
+      "Integration with carrier_suppression_dashboard.py",
+      "Census block precision (future enhancement)"
+    ]
   },
   "common_mistakes": {
     "multiple_databases": "NEVER create .db files outside data/databases/",
@@ -202,11 +258,11 @@
     "missing_assertion": "ALWAYS assert db_path before connection",
     "csv_only": "Save to BOTH database AND CSV for compatibility",
     "nan_to_integer": "ALWAYS check for NULL AND NaN before CAST(...AS INTEGER) - use: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...)",
-    "rolling_metrics_null": "Early dates have NULL rolling metrics - TIERED approach reduces this (28d→14d→4d)",
+    "rolling_metrics_null": "Early dates have NULL rolling metrics - TIERED approach reduces this (28d\u219214d\u21924d)",
     "tiered_window_handling": "Use selected_window column to see which tier was used; filter WHERE selected_window IS NOT NULL to exclude early dates",
     "rolling_view_columns": "Rolling views use: avg_wins, stddev_wins, n_periods, selected_window (NOT avg_wins_28d, n_periods_28d)",
-    "scan_base_outliers_implementation": "✅ CORRECT: Calculates rolling metrics over ENTIRE time series, filters to graph window at end (line 295). Always check WHERE clause is at final SELECT.",
-    "nan_handling": "✅ FIXED: All CAST operations now check: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...) ELSE 0/NULL"
+    "scan_base_outliers_implementation": "\u2705 CORRECT: Calculates rolling metrics over ENTIRE time series, filters to graph window at end (line 295). Always check WHERE clause is at final SELECT.",
+    "nan_handling": "\u2705 FIXED: All CAST operations now check: WHEN col IS NOT NULL AND NOT isnan(col) THEN CAST(...) ELSE 0/NULL"
   },
   "git_workflow": {
     "branch": "codex-agent",
