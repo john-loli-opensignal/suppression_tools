@@ -366,7 +366,7 @@ def ui():
             
             st.dataframe(
                 detailed,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
                 column_config={
                     'Date': st.column_config.DateColumn('Date', width='small'),
@@ -647,12 +647,12 @@ def ui():
                                         carrier_summary = carrier_summary.sort_values('Total Unaddressed Impact', ascending=False)
                                         
                                         st.markdown('**Summary by Carrier:**')
-                                        st.dataframe(carrier_summary, use_container_width=True, hide_index=True)
+                                        st.dataframe(carrier_summary, width='stretch', hide_index=True)
                                         
                                         st.markdown('**Details by Date:**')
                                         st.dataframe(
                                             insufficient_df[['date', 'winner', 'need_remaining', 'auto_removed', 'min_wins_required', 'reason']],
-                                            use_container_width=True,
+                                            width='stretch',
                                             hide_index=True
                                         )
                                         

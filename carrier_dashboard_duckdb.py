@@ -755,7 +755,7 @@ def main():
             st.session_state.analysis_mode,
             primary=st.session_state.primary_carrier,
         )
-        st.plotly_chart(fig, config={"responsive": True})
+        st.plotly_chart(fig)
 
     # Indicate pending changes since last run
     try:

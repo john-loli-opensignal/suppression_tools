@@ -363,7 +363,7 @@ def main():
             lambda x: 'background-color: #ffcccc' if x else '',
             subset=['is_outlier']
         )
-        st.dataframe(styled_df, use_container_width=True)
+        st.dataframe(styled_df, width="stretch")
     
     with col2:
         st.metric("Total H2H Pairs", len(national_df))
@@ -407,7 +407,7 @@ def main():
                 markers=True
             )
             fig.update_layout(xaxis_title="Date", yaxis_title=f"Total {metric_type.title()}s")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             
             # Summary metrics
             col1, col2, col3, col4 = st.columns(4)
@@ -439,7 +439,7 @@ def main():
                     lambda x: 'background-color: #ffcccc' if x else '',
                     subset=['is_outlier']
                 )
-                st.dataframe(styled_state, use_container_width=True, height=400)
+                st.dataframe(styled_state, width="stretch", height=400)
             
             with col2:
                 # Choropleth map (if we want to add later)
@@ -480,7 +480,7 @@ def main():
                 lambda x: 'background-color: #ffcccc' if x else '',
                 subset=['is_outlier']
             )
-            st.dataframe(styled_dma, use_container_width=True, height=400)
+            st.dataframe(styled_dma, width="stretch", height=400)
             
             outlier_dmas = dma_df[dma_df['is_outlier'] == True]
             if not outlier_dmas.empty:
@@ -531,7 +531,7 @@ def main():
                     color_z_score,
                     subset=['z_score']
                 )
-                st.dataframe(styled_outliers, use_container_width=True, height=500)
+                st.dataframe(styled_outliers, width="stretch", height=500)
                 
                 # Statistics
                 col1, col2, col3, col4 = st.columns(4)
@@ -547,7 +547,7 @@ def main():
                     nbins=30,
                     title="Distribution of Outlier Z-Scores"
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
             else:
                 st.info("No outlier census blocks detected at this threshold")
         
@@ -556,7 +556,7 @@ def main():
         block_df = get_census_block_breakdown(con, ds, mover_ind, metric_type, winner, loser, state_filter, dma_filter)
         
         if not block_df.empty:
-            st.dataframe(block_df, use_container_width=True, height=400)
+            st.dataframe(block_df, width="stretch", height=400)
             
             # Download option
             csv = block_df.to_csv(index=False)

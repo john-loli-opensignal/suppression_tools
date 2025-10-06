@@ -1093,7 +1093,7 @@ def main():
     
     fig.update_layout(width=1400, height=820, margin=dict(l=40, r=40, t=60, b=40),
                      title=f"{metric.replace('_', ' ').title()} - {analysis_mode} View")
-    st.plotly_chart(fig, use_container_width=False)
+    st.plotly_chart(fig, width='content')
     
     # Summary stats
     col1, col2, col3 = st.columns(3)
