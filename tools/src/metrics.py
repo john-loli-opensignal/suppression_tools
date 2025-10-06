@@ -216,14 +216,14 @@ def competitor_view(
     h2h_losses AS (
         SELECT 
             the_date,
-            winner as competitor,
+            loser as competitor,
             SUM(total_losses) as h2h_losses
         FROM {loss_cube}
-        WHERE loser = '{primary.replace("'", "''")}'
-          AND winner IN ({comp_list})
+        WHERE winner = '{primary.replace("'", "''")}'
+          AND loser IN ({comp_list})
           AND the_date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
           {where_extra}
-        GROUP BY the_date, winner
+        GROUP BY the_date, loser
     ),
     primary_totals_win AS (
         SELECT 
