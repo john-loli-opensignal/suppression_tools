@@ -24,9 +24,40 @@ def ui():
     mover_ind = st.sidebar.selectbox('Mover Type', options=[False, True], index=0, 
                                      format_func=lambda x: 'Mover' if x else 'Non-Mover')
     
-    # Database info (read-only display)
-    db_path = db.get_default_db_path()
-    st.sidebar.info(f"📊 Database: `{os.path.basename(db_path)}`")
+    # Database selection
+    st.sidebar.subheader('Database')
+    db_mode = st.sidebar.radio(
+        'Select DB version',
+        options=['2.5 (v15.0 current)', '2.1 (v0.3 legacy)'],
+        index=0,
+        help='2.5 uses 2020 blocks (v15.0) at data/databases/duck_suppression.db. 2.1 uses 2010 blocks (v0.3).'
+    )
+    if '2.1' in db_mode:
+        # v0.3 legacy path fallback; prefer v03 if present, else current
+        v03_db = 'data/databases/duck_suppression_v03.db'
+        if os.path.exists(v03_db):
+            db_path = v03_db
+        else:
+            db_path = db.get_default_db_path()
+            st.sidebar.warning('v0.3 legacy DB not found; falling back to current 2.5 DB')
+    else:
+        # 2.5 current
+        db_path = db.get_default_db_path()
+    st.sidebar.info(f"📊 Database: `{db_path}`")
+
+    # Suppression profile selection (ties suppression behavior to DB lineage)
+    st.sidebar.subheader('Suppression Profile')
+    suppression_profile = st.sidebar.selectbox(
+        'Profile',
+        options=['2.5 - tied to current (v15.0)', '2.1 - tied to legacy (v0.3)'],
+        index=0,
+        help='Choose ruleset aligned with the selected DB lineage.'
+    )
+    # Light guardrail: nudge if mismatch
+    if ('2.5' in suppression_profile) and ('2.1' in db_mode):
+        st.sidebar.warning('Profile 2.5 selected but DB is 2.1 (v0.3 legacy). Consider switching DB to 2.5 (v15.0).')
+    if ('2.1' in suppression_profile) and ('2.5' in db_mode):
+        st.sidebar.warning('Profile 2.1 selected but DB is 2.5 (v15.0). Consider aligning profile and DB.')
 
     st.sidebar.header('Graph Window')
     view_start = st.sidebar.date_input('Start Date', value=date(2025,6,1))
@@ -80,14 +111,20 @@ def ui():
                     top_n=top_n,
                     min_share_pct=min_share_pct,
                     egregious_threshold=egregious_threshold,
-                    db_path=db_path
+                    db_path=db_path,
+                    profile='2.5' if '2.5' in suppression_profile else '2.1'
                 )
             
             st.session_state['base_outliers'] = outliers_df if not outliers_df.empty else None
             
             # Always show graph with all top carriers (filtered by share if specified)
             with st.spinner('Loading national time series...'):
-                all_top_carriers = get_top_n_carriers(ds, mover_ind, n=top_n, min_share_pct=min_share_pct, db_path=db_path)
+                all_top_carriers = get_top_n_carriers(
+                    ds, mover_ind,
+                    n=top_n,
+                    min_share_pct=min_share_pct,
+                    db_path=db_path
+                )
                 ts = base_national_series(
                     ds=ds,
                     mover_ind=mover_ind,
@@ -410,7 +447,8 @@ def ui():
                         dma_z_threshold=dma_z_threshold,
                         dma_pct_threshold=dma_pct_threshold,
                         rare_pair_impact_threshold=rare_pair_impact,
-                        db_path=db_path
+                        db_path=db_path,
+                        profile='2.5' if '2.5' in suppression_profile else '2.1'
                     )
                     
                     if enriched.empty:
@@ -975,4 +1013,3 @@ def ui():
 
 if __name__ == '__main__':
     ui()
-

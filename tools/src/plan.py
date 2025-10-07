@@ -29,9 +29,11 @@ def get_top_n_carriers(
     if db_path is None:
         db_path = db.get_default_db_path()
     
-    # Assert correct database path
-    assert db_path.endswith('data/databases/duck_suppression.db'), \
-        f"ERROR: Wrong database path: {db_path}. Must use data/databases/duck_suppression.db"
+    # Allow v15.0 default and v0.3 legacy DBs; enforce directory policy
+    assert (
+        db_path.endswith('data/databases/duck_suppression.db') or
+        db_path.endswith('data/databases/duck_suppression_v03.db')
+    ), f"ERROR: Wrong database path: {db_path}. Must use data/databases/duck_suppression(.db|_v03.db)"
     
     cube_table = f"{ds}_win_{'mover' if mover_ind else 'non_mover'}_cube"
     
@@ -99,9 +101,11 @@ def base_national_series(
     if db_path is None:
         db_path = db.get_default_db_path()
     
-    # Assert correct database path
-    assert db_path.endswith('data/databases/duck_suppression.db'), \
-        f"ERROR: Wrong database path: {db_path}. Must use data/databases/duck_suppression.db"
+    # Allow v15.0 default and v0.3 legacy DBs; enforce directory policy
+    assert (
+        db_path.endswith('data/databases/duck_suppression.db') or
+        db_path.endswith('data/databases/duck_suppression_v03.db')
+    ), f"ERROR: Wrong database path: {db_path}. Must use data/databases/duck_suppression(.db|_v03.db)"
     
     cube_table = f"{ds}_win_{'mover' if mover_ind else 'non_mover'}_cube"
     
@@ -148,7 +152,8 @@ def scan_base_outliers(
     top_n: int = 50,
     min_share_pct: float = 0.0,
     egregious_threshold: int = 40,
-    db_path: Optional[str] = None
+    db_path: Optional[str] = None,
+    profile: Optional[str] = None
 ) -> pd.DataFrame:
     """Scan for national-level outliers using tiered rolling windows.
     
@@ -176,10 +181,14 @@ def scan_base_outliers(
     """
     if db_path is None:
         db_path = db.get_default_db_path()
-    
-    # Assert correct database path
-    assert db_path.endswith('data/databases/duck_suppression.db'), \
-        f"ERROR: Wrong database path: {db_path}. Must use data/databases/duck_suppression.db"
+    # Optional: profile currently unused; placeholder for future profile-specific tweaks
+    _ = profile
+
+    # Allow v15.0 default and v0.3 legacy DBs; enforce directory policy
+    assert (
+        db_path.endswith('data/databases/duck_suppression.db') or
+        db_path.endswith('data/databases/duck_suppression_v03.db')
+    ), f"ERROR: Wrong database path: {db_path}. Must use data/databases/duck_suppression(.db|_v03.db)"
     
     # Get top N carriers (with optional share filter)
     top_carriers = get_top_n_carriers(ds, mover_ind, top_n, min_share_pct, db_path)
@@ -352,7 +361,8 @@ def build_enriched_cube(
     dma_z_threshold: float = 1.5,
     dma_pct_threshold: float = 30.0,
     rare_pair_impact_threshold: int = 15,
-    db_path: Optional[str] = None
+    db_path: Optional[str] = None,
+    profile: Optional[str] = None
 ) -> pd.DataFrame:
     """Build enriched cube with all metrics needed for UI plan building.
     
@@ -374,7 +384,9 @@ def build_enriched_cube(
     """
     if db_path is None:
         db_path = db.get_default_db_path()
-    
+    # Optional: profile currently unused; placeholder for future profile-specific tweaks
+    _ = profile
+
     # Assert correct database path
     assert db_path.endswith('data/databases/duck_suppression.db'), \
         f"ERROR: Wrong database path: {db_path}. Must use data/databases/duck_suppression.db"
@@ -505,4 +517,3 @@ def build_enriched_cube(
         ORDER BY the_date, winner, dma_name, loser
     """
     return db.query(sql, db_path)
-
