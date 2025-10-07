@@ -166,15 +166,23 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
                     # Guard: metric column may be missing under rare cache paths; fall back to smoothed line
                     has_metric = metric in pos_out.columns
                     vals_pos = pd.to_numeric(pos_out[metric], errors='coerce') if has_metric else None
+                    has_day_type = 'day_type' in pos_out.columns
                     
                     # Build hover text with special handling for wins_per_loss
-                    if metric == 'wins_per_loss' and 'raw_wins' in pos_out.columns and 'raw_losses' in pos_out.columns and has_metric:
+                    if metric == 'wins_per_loss' and 'raw_wins' in pos_out.columns and 'raw_losses' in pos_out.columns and has_metric and has_day_type:
                         hover_o_pos = []
                         for idx, (d, v, z, dt) in enumerate(zip(pos_out['the_date'], vals_pos.fillna(0), pos_out['zscore'].round(2).astype(str), pos_out['day_type'])):
                             row_idx = pos_out.index[idx]
                             raw_w = int(pos_out.loc[row_idx, 'raw_wins']) if pd.notna(pos_out.loc[row_idx, 'raw_wins']) else 0
                             raw_l = int(pos_out.loc[row_idx, 'raw_losses']) if pd.notna(pos_out.loc[row_idx, 'raw_losses']) else 0
                             hover_o_pos.append(f"{carrier}<br>{d.date()}<br>Wins: {raw_w:,}<br>Losses: {raw_l:,}<br>Ratio: {v:.3f}<br>z: {z}<br>{dt}")
+                    elif metric == 'wins_per_loss' and 'raw_wins' in pos_out.columns and 'raw_losses' in pos_out.columns and has_metric:
+                        hover_o_pos = []
+                        for idx, (d, v, z) in enumerate(zip(pos_out['the_date'], vals_pos.fillna(0), pos_out['zscore'].round(2).astype(str))):
+                            row_idx = pos_out.index[idx]
+                            raw_w = int(pos_out.loc[row_idx, 'raw_wins']) if pd.notna(pos_out.loc[row_idx, 'raw_wins']) else 0
+                            raw_l = int(pos_out.loc[row_idx, 'raw_losses']) if pd.notna(pos_out.loc[row_idx, 'raw_losses']) else 0
+                            hover_o_pos.append(f"{carrier}<br>{d.date()}<br>Wins: {raw_w:,}<br>Losses: {raw_l:,}<br>Ratio: {v:.3f}<br>z: {z}")
                     elif zvals is not None and dayt is not None and has_metric:
                         hover_o_pos = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}<br>z: {z}<br>{dt}"
                                        for d, v, z, dt in zip(pos_out['the_date'], vals_pos.fillna(0), pos_out['zscore'].round(2).astype(str), pos_out['day_type'])]
@@ -195,21 +203,35 @@ def create_plot(pdf: pd.DataFrame, metric: str, active_filters=None, analysis_mo
                 if not neg_out.empty:
                     has_metric_n = metric in neg_out.columns
                     vals_neg = pd.to_numeric(neg_out[metric], errors='coerce') if has_metric_n else None
+                    has_day_type_n = 'day_type' in neg_out.columns
                     
                     # Build hover text with special handling for wins_per_loss
-                    if metric == 'wins_per_loss' and 'raw_wins' in neg_out.columns and 'raw_losses' in neg_out.columns and has_metric_n:
+                    if metric == 'wins_per_loss' and 'raw_wins' in neg_out.columns and 'raw_losses' in neg_out.columns and has_metric_n and has_day_type_n:
                         hover_o_neg = []
                         for idx, (d, v, z, dt) in enumerate(zip(neg_out['the_date'], vals_neg.fillna(0), neg_out['zscore'].round(2).astype(str), neg_out['day_type'])):
                             row_idx = neg_out.index[idx]
                             raw_w = int(neg_out.loc[row_idx, 'raw_wins']) if pd.notna(neg_out.loc[row_idx, 'raw_wins']) else 0
                             raw_l = int(neg_out.loc[row_idx, 'raw_losses']) if pd.notna(neg_out.loc[row_idx, 'raw_losses']) else 0
                             hover_o_neg.append(f"{carrier}<br>{d.date()}<br>Wins: {raw_w:,}<br>Losses: {raw_l:,}<br>Ratio: {v:.3f}<br>z: {z}<br>{dt}")
-                    elif has_metric_n:
+                    elif metric == 'wins_per_loss' and 'raw_wins' in neg_out.columns and 'raw_losses' in neg_out.columns and has_metric_n:
+                        hover_o_neg = []
+                        for idx, (d, v, z) in enumerate(zip(neg_out['the_date'], vals_neg.fillna(0), neg_out['zscore'].round(2).astype(str))):
+                            row_idx = neg_out.index[idx]
+                            raw_w = int(neg_out.loc[row_idx, 'raw_wins']) if pd.notna(neg_out.loc[row_idx, 'raw_wins']) else 0
+                            raw_l = int(neg_out.loc[row_idx, 'raw_losses']) if pd.notna(neg_out.loc[row_idx, 'raw_losses']) else 0
+                            hover_o_neg.append(f"{carrier}<br>{d.date()}<br>Wins: {raw_w:,}<br>Losses: {raw_l:,}<br>Ratio: {v:.3f}<br>z: {z}")
+                    elif has_metric_n and has_day_type_n:
                         hover_o_neg = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}<br>z: {z}<br>{dt}"
                                        for d, v, z, dt in zip(neg_out['the_date'], vals_neg.fillna(0), neg_out['zscore'].round(2).astype(str), neg_out['day_type'])]
-                    else:
+                    elif has_metric_n:
+                        hover_o_neg = [f"{carrier}<br>{d.date()}<br>{metric}: {v:.6f}<br>z: {z}"
+                                       for d, v, z in zip(neg_out['the_date'], vals_neg.fillna(0), neg_out['zscore'].round(2).astype(str))]
+                    elif has_day_type_n:
                         hover_o_neg = [f"{carrier}<br>{d.date()}<br>z: {z}<br>{dt}"
                                        for d, z, dt in zip(neg_out['the_date'], neg_out['zscore'].round(2).astype(str), neg_out['day_type'])]
+                    else:
+                        hover_o_neg = [f"{carrier}<br>{d.date()}<br>z: {z}"
+                                       for d, z in zip(neg_out['the_date'], neg_out['zscore'].round(2).astype(str))]
                     y_marker_neg = (smooth.loc[neg_out.index] if isinstance(smooth, pd.Series) and smoothing_on else (vals_neg if has_metric_n else None))
                     fig.add_trace(go.Scatter(
                         x=neg_out['the_date'], y=y_marker_neg,
@@ -593,6 +615,10 @@ def compute_competitor_pdf(db_path: str, filters: dict, primary: str, competitor
         pdf = base.groupby('competitor', group_keys=False).apply(_z_for_group).reset_index(drop=True)
     else:
         pdf = base.copy()
+        # Add day_type column for consistency
+        pdf['day_type'] = pdf['the_date'].apply(lambda d: 'Sat' if pd.Timestamp(d).weekday() == 5
+                                                else 'Sun' if pd.Timestamp(d).weekday() == 6
+                                                else 'Weekday')
         pdf['zscore'] = 0
         pdf['is_outlier'] = False
     
